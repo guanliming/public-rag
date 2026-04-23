@@ -364,10 +364,13 @@ class EmbeddingFactory:
                     self.model = model
                     self.api_key = api_key
                     dashscope.api_key = api_key
+                    self.batch_size = 10
 
                 def embed_documents(self, texts: List[str]) -> List[List[float]]:
                     """
                     对文档列表进行向量化
+
+                    阿里百炼 API 限制每批最多 10 个文本，需要分批处理。
 
                     Args:
                         texts: 文本列表
@@ -375,16 +378,43 @@ class EmbeddingFactory:
                     Returns:
                         List[List[float]]: 向量列表
                     """
-                    resp = dashscope.TextEmbedding.call(
-                        model=self.model,
-                        input=texts,
-                        text_type="document"
-                    )
-                    if resp.status_code != 200:
-                        raise Exception(
-                            f"嵌入调用失败: {resp.code} - {resp.message}"
+                    all_embeddings = []
+                    total_texts = len(texts)
+                    print(f"正在向量化 {total_texts} 个文档片段，每批 {self.batch_size} 个...")
+
+                    for i in range(0, total_texts, self.batch_size):
+                        batch = texts[i:i + self.batch_size]
+                        batch_num = (i // self.batch_size) + 1
+                        total_batches = (total_texts + self.batch_size - 1) // self.batch_size
+                        print(f"处理批次 {batch_num}/{total_batches}，共 {len(batch)} 个文本")
+
+                        resp = dashscope.TextEmbedding.call(
+                            model=self.model,
+                            input=batch,
+                            text_type="document"
                         )
-                    return [item.embedding for item in resp.output.embeddings]
+                        if resp.status_code != 200:
+                            raise Exception(
+                                f"嵌入调用失败: {resp.code} - {resp.message}"
+                            )
+
+                        # 处理响应（支持 dict 和对象两种格式）
+                        output = resp.output
+                        if isinstance(output, dict):
+                            # 如果 output 是字典
+                            embeddings_list = output.get('embeddings', [])
+                            batch_embeddings = [
+                                item.get('embedding', []) if isinstance(item, dict) else item.embedding
+                                for item in embeddings_list
+                            ]
+                        else:
+                            # 如果 output 是对象
+                            batch_embeddings = [item.embedding for item in output.embeddings]
+
+                        all_embeddings.extend(batch_embeddings)
+
+                    print(f"向量化完成，共 {len(all_embeddings)} 个向量")
+                    return all_embeddings
 
                 def embed_query(self, text: str) -> List[float]:
                     """
@@ -405,7 +435,17 @@ class EmbeddingFactory:
                         raise Exception(
                             f"嵌入调用失败: {resp.code} - {resp.message}"
                         )
-                    return resp.output.embeddings[0].embedding
+
+                    # 处理响应（支持 dict 和对象两种格式）
+                    output = resp.output
+                    if isinstance(output, dict):
+                        embeddings_list = output.get('embeddings', [])
+                        if embeddings_list:
+                            first = embeddings_list[0]
+                            return first.get('embedding', []) if isinstance(first, dict) else first.embedding
+                        return []
+                    else:
+                        return output.embeddings[0].embedding
 
             embedding = DashScopeEmbeddings(
                 model=config.model_name,

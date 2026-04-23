@@ -310,32 +310,91 @@ def register_api_routes(bp: Blueprint) -> None:
                 "message": "没有选择文件",
             }), 400
 
-        # 从原始文件名提取扩展名（中文文件名需要先检查）
+        # 从原始文件名提取扩展名（处理中文文件名和Windows路径）
         original_filename = file.filename
-        _, original_ext = os.path.splitext(original_filename)
+        print(f"接收到的原始文件名: {original_filename}")
+
+        # 处理 Windows 路径格式（如 C:\fakepath\filename.txt）
+        # 先用 os.path.basename 提取纯文件名
+        base_name = os.path.basename(original_filename)
+        # 如果 basename 返回空（可能是路径分隔符问题），手动处理
+        if not base_name:
+            # 尝试用反斜杠分割
+            if '\\' in original_filename:
+                base_name = original_filename.split('\\')[-1]
+            elif '/' in original_filename:
+                base_name = original_filename.split('/')[-1]
+            else:
+                base_name = original_filename
+
+        print(f"提取的纯文件名: {base_name}")
+
+        # 提取扩展名
+        _, original_ext = os.path.splitext(base_name)
+        print(f"提取的扩展名: '{original_ext}'")
+
+        # 如果扩展名提取失败，尝试手动查找
+        if not original_ext:
+            # 手动查找最后一个点后的内容
+            if '.' in base_name:
+                original_ext = '.' + base_name.split('.')[-1]
+                print(f"手动提取的扩展名: '{original_ext}'")
 
         # 检查文件格式（使用原始文件名的扩展名）
         if SupportedFormats.from_extension(original_ext) is None:
             return jsonify({
                 "success": False,
-                "message": f"不支持的文件格式: {original_ext}",
+                "message": f"不支持的文件格式: {original_ext}。支持的格式: {SupportedFormats.get_supported_extensions()}",
                 "supported_formats": SupportedFormats.get_supported_extensions(),
             }), 400
 
         # 使用 secure_filename 处理文件名，但处理中文文件名的情况
-        safe_filename = secure_filename(original_filename)
-        
-        # 如果 secure_filename 返回空（比如中文文件名），使用原始文件名的 base64 编码或直接保留原始名
-        if not safe_filename or safe_filename == "":
-            # 从原始文件名提取纯文件名（不含路径）
+        safe_filename = secure_filename(base_name)
+
+        print(f"secure_filename 处理后: '{safe_filename}'")
+
+        # 检查 safe_filename 是否有效（不是只有扩展名或空）
+        def is_valid_filename(filename):
+            if not filename or filename == "":
+                return False
+            # 如果文件名以 . 开头且后面没有其他字符（如 .txt），则无效
+            if filename.startswith('.') and '.' not in filename[1:]:
+                return False
+            # 检查是否只有扩展名（没有主文件名）
+            name, ext = os.path.splitext(filename)
+            if not name and ext:  # 如 ".txt"
+                return False
+            return True
+
+        # 如果 secure_filename 返回无效文件名，使用正则替换
+        if not is_valid_filename(safe_filename):
             import re
-            # 只保留文件名部分，去除路径
-            base_name = os.path.basename(original_filename)
             # 替换不安全字符为下划线
             safe_filename = re.sub(r'[^\w\.\-]', '_', base_name)
-            # 如果还是空，使用默认名
-            if not safe_filename or safe_filename == "":
-                safe_filename = f"document{original_ext}"
+            print(f"正则替换后: '{safe_filename}'")
+
+            # 再次检查，如果还是无效，使用默认名
+            if not is_valid_filename(safe_filename):
+                # 提取主文件名（不含扩展名）
+                base_name_without_ext = os.path.splitext(base_name)[0]
+                # 如果主文件名是空的，使用默认名
+                if not base_name_without_ext or base_name_without_ext == "":
+                    safe_filename = f"document{original_ext}"
+                else:
+                    # 替换主文件名中的不安全字符，然后加上扩展名
+                    safe_base = re.sub(r'[^\w\-]', '_', base_name_without_ext)
+                    if not safe_base or safe_base == "":
+                        safe_base = "document"
+                    safe_filename = f"{safe_base}{original_ext}"
+                print(f"使用默认名: '{safe_filename}'")
+
+        # 最后确保文件名有扩展名
+        _, current_ext = os.path.splitext(safe_filename)
+        if not current_ext and original_ext:
+            safe_filename = f"{safe_filename}{original_ext}"
+            print(f"添加扩展名后: '{safe_filename}'")
+
+        print(f"最终安全文件名: {safe_filename}")
 
         # 生成唯一文件名
         unique_filename = f"{uuid.uuid4().hex}_{safe_filename}"
