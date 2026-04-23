@@ -48,7 +48,7 @@ class DatabaseConfig:
         password: 数据库密码
         db_name: 数据库名称
         table_name: 向量存储表名
-        embedding_dimension: 嵌入向量维度（默认 384，适用于 all-MiniLM-L6-v2）
+        embedding_dimension: 嵌入向量维度（默认 1024，适用于阿里百炼 text-embedding-v3）
     """
 
     # 基础连接参数
@@ -60,7 +60,7 @@ class DatabaseConfig:
 
     # 向量存储相关
     table_name: str = "rag_documents"
-    embedding_dimension: int = 384
+    embedding_dimension: int = 1024
 
     @classmethod
     def from_env(cls) -> "DatabaseConfig":
@@ -85,7 +85,7 @@ class DatabaseConfig:
             password=os.getenv("DB_PASSWORD", "postgres"),
             db_name=os.getenv("DB_NAME", "rag_db"),
             table_name=os.getenv("VECTOR_TABLE_NAME", "rag_documents"),
-            embedding_dimension=int(os.getenv("EMBEDDING_DIMENSION", "384")),
+            embedding_dimension=int(os.getenv("EMBEDDING_DIMENSION", "1024")),
         )
 
     @property

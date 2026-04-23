@@ -45,10 +45,12 @@ class EmbeddingModelType(Enum):
     属性:
         LOCAL: 本地模型（sentence-transformers）
         OPENAI: OpenAI 嵌入模型
+        DASHSCOPE: 阿里百炼嵌入模型
     """
 
     LOCAL = "local"
     OPENAI = "openai"
+    DASHSCOPE = "dashscope"
 
 
 @dataclass
@@ -60,22 +62,21 @@ class EmbeddingConfig:
     支持从环境变量读取配置。
 
     属性:
-        model_type: 模型类型（LOCAL 或 OPENAI）
+        model_type: 模型类型（LOCAL、OPENAI 或 DASHSCOPE）
         model_name: 模型名称
         openai_api_key: OpenAI API Key（仅 OpenAI 模型需要）
+        dashscope_api_key: 阿里百炼 API Key（仅 DashScope 模型需要）
         device: 运行设备（"cpu" 或 "cuda"，仅本地模型）
     """
 
-    # 模型类型
-    model_type: EmbeddingModelType = EmbeddingModelType.LOCAL
+    model_type: EmbeddingModelType = EmbeddingModelType.DASHSCOPE
 
-    # 模型名称
-    model_name: str = "all-MiniLM-L6-v2"
+    model_name: str = "text-embedding-v3"
 
-    # OpenAI 相关配置
     openai_api_key: Optional[str] = None
 
-    # 本地模型相关配置
+    dashscope_api_key: Optional[str] = None
+
     device: str = "cpu"
 
     @classmethod
@@ -90,31 +91,39 @@ class EmbeddingConfig:
             EmbeddingConfig: 嵌入模型配置实例
 
         环境变量:
-            EMBEDDING_MODEL_TYPE: "local" 或 "openai"
+            EMBEDDING_MODEL_TYPE: "local"、"openai" 或 "dashscope"
             EMBEDDING_MODEL_NAME: 模型名称
             OPENAI_API_KEY: OpenAI API Key
+            DASHSCOPE_API_KEY: 阿里百炼 API Key
             EMBEDDING_DEVICE: 运行设备（cpu/cuda）
         """
-        # 读取模型类型
-        model_type_str = os.getenv("EMBEDDING_MODEL_TYPE", "local").lower()
+        model_type_str = os.getenv("EMBEDDING_MODEL_TYPE", "dashscope").lower()
         if model_type_str == "openai":
             model_type = EmbeddingModelType.OPENAI
+        elif model_type_str == "dashscope":
+            model_type = EmbeddingModelType.DASHSCOPE
         else:
             model_type = EmbeddingModelType.LOCAL
 
-        # 读取模型名称
-        model_name = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
+        default_model = {
+            EmbeddingModelType.LOCAL: "all-MiniLM-L6-v2",
+            EmbeddingModelType.OPENAI: "text-embedding-ada-002",
+            EmbeddingModelType.DASHSCOPE: "text-embedding-v3",
+        }
+        model_name = os.getenv(
+            "EMBEDDING_MODEL_NAME",
+            default_model.get(model_type, "text-embedding-v3")
+        )
 
-        # 读取 OpenAI API Key
         openai_api_key = os.getenv("OPENAI_API_KEY")
-
-        # 读取设备配置
+        dashscope_api_key = os.getenv("DASHSCOPE_API_KEY")
         device = os.getenv("EMBEDDING_DEVICE", "cpu")
 
         return cls(
             model_type=model_type,
             model_name=model_name,
             openai_api_key=openai_api_key,
+            dashscope_api_key=dashscope_api_key,
             device=device,
         )
 
@@ -180,6 +189,8 @@ class EmbeddingFactory:
             embedding = cls._create_local_embedding(config)
         elif config.model_type == EmbeddingModelType.OPENAI:
             embedding = cls._create_openai_embedding(config)
+        elif config.model_type == EmbeddingModelType.DASHSCOPE:
+            embedding = cls._create_dashscope_embedding(config)
         else:
             raise ValueError(f"不支持的嵌入模型类型: {config.model_type}")
 
@@ -295,6 +306,113 @@ class EmbeddingFactory:
             ) from e
 
     @classmethod
+    def _create_dashscope_embedding(cls, config: EmbeddingConfig) -> Embeddings:
+        """
+        创建阿里百炼嵌入模型
+
+        使用 DashScope API 进行向量化。
+
+        Args:
+            config: 嵌入模型配置
+
+        Returns:
+            Embeddings: LangChain Embeddings 接口实例
+
+        注意:
+            - 需要有效的 DASHSCOPE_API_KEY
+            - 会产生 API 调用费用
+            - 需要网络连接
+
+        推荐的阿里百炼嵌入模型:
+            - text-embedding-v3: 最新嵌入模型，1024 维
+            - text-embedding-v2: 1024 维
+            - text-embedding-v1: 1024 维
+        """
+        try:
+            import dashscope
+            from langchain_core.embeddings import Embeddings
+            from typing import List
+
+            api_key = config.dashscope_api_key or os.getenv("DASHSCOPE_API_KEY")
+            if not api_key:
+                raise ValueError(
+                    "使用阿里百炼嵌入模型需要设置 DASHSCOPE_API_KEY 环境变量。"
+                    "请在 .env.local 文件中添加: DASHSCOPE_API_KEY=your-api-key"
+                )
+
+            dashscope.api_key = api_key
+
+            print(f"正在初始化阿里百炼嵌入模型: {config.model_name}...")
+
+            class DashScopeEmbeddings(Embeddings):
+                """
+                阿里百炼嵌入模型封装类
+
+                实现 LangChain Embeddings 接口，使用 DashScope API 进行向量化。
+                """
+
+                def __init__(self, model: str, api_key: str):
+                    self.model = model
+                    self.api_key = api_key
+                    dashscope.api_key = api_key
+
+                def embed_documents(self, texts: List[str]) -> List[List[float]]:
+                    """
+                    对文档列表进行向量化
+
+                    Args:
+                        texts: 文本列表
+
+                    Returns:
+                        List[List[float]]: 向量列表
+                    """
+                    resp = dashscope.TextEmbedding.call(
+                        model=self.model,
+                        input=texts,
+                        text_type="document"
+                    )
+                    if resp.status_code != 200:
+                        raise Exception(
+                            f"嵌入调用失败: {resp.code} - {resp.message}"
+                        )
+                    return [item.embedding for item in resp.output.embeddings]
+
+                def embed_query(self, text: str) -> List[float]:
+                    """
+                    对查询文本进行向量化
+
+                    Args:
+                        text: 查询文本
+
+                    Returns:
+                        List[float]: 向量
+                    """
+                    resp = dashscope.TextEmbedding.call(
+                        model=self.model,
+                        input=[text],
+                        text_type="query"
+                    )
+                    if resp.status_code != 200:
+                        raise Exception(
+                            f"嵌入调用失败: {resp.code} - {resp.message}"
+                        )
+                    return resp.output.embeddings[0].embedding
+
+            embedding = DashScopeEmbeddings(
+                model=config.model_name,
+                api_key=api_key
+            )
+
+            print(f"阿里百炼嵌入模型初始化完成: {config.model_name}")
+            return embedding
+
+        except ImportError as e:
+            raise ImportError(
+                "使用阿里百炼嵌入模型需要安装 dashscope。"
+                "请运行: pip install dashscope"
+            ) from e
+
+    @classmethod
     def clear_cache(cls) -> None:
         """
         清空模型缓存
@@ -315,39 +433,39 @@ def get_embedding_model(
     这是对外的主要接口，简化模型创建过程。
 
     Args:
-        model_type: 模型类型，"local" 或 "openai"
+        model_type: 模型类型，"local"、"openai" 或 "dashscope"
         model_name: 模型名称
 
     Returns:
         Embeddings: LangChain Embeddings 接口实例
 
     示例:
-        >>> # 使用默认配置（从环境变量读取）
+        >>> # 使用默认配置（从环境变量读取，默认为 dashscope）
         >>> embedding = get_embedding_model()
         >>>
-        >>> # 显式指定使用本地模型
-        >>> embedding = get_embedding_model(model_type="local")
+        >>> # 显式指定使用阿里百炼模型
+        >>> embedding = get_embedding_model(model_type="dashscope")
         >>>
         >>> # 指定特定模型
         >>> embedding = get_embedding_model(
-        ...     model_type="local",
-        ...     model_name="all-mpnet-base-v2"
+        ...     model_type="dashscope",
+        ...     model_name="text-embedding-v3"
         ... )
     """
-    # 从环境变量获取默认配置
     config = EmbeddingConfig.from_env()
 
-    # 覆盖配置（如果提供了参数）
     if model_type:
-        if model_type.lower() == "openai":
+        model_type_lower = model_type.lower()
+        if model_type_lower == "openai":
             config.model_type = EmbeddingModelType.OPENAI
+        elif model_type_lower == "dashscope":
+            config.model_type = EmbeddingModelType.DASHSCOPE
         else:
             config.model_type = EmbeddingModelType.LOCAL
 
     if model_name:
         config.model_name = model_name
 
-    # 创建并返回嵌入模型
     return EmbeddingFactory.create(config)
 
 
@@ -363,6 +481,10 @@ EMBEDDING_DIMENSIONS = {
     "text-embedding-ada-002": 1536,
     "text-embedding-3-small": 1536,
     "text-embedding-3-large": 3072,
+    # 阿里百炼模型 (DashScope)
+    "text-embedding-v1": 1024,
+    "text-embedding-v2": 1024,
+    "text-embedding-v3": 1024,
 }
 
 
