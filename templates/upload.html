@@ -532,26 +532,34 @@
         function showSuccessResult(result) {
             const data = result.data;
             const stats = data.stats || {};
+            const vectorStats = data.vector_stats || {};
+            const summary = data.summary || {};
 
-            let statsHtml = '';
-            if (stats.total_count !== undefined) {
-                statsHtml = `
-                    <div class="stats-grid">
-                        <div class="stat-item">
-                            <div class="stat-value">${stats.total_count}</div>
-                            <div class="stat-label">文档片段</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${(stats.total_chars / 1000).toFixed(1)}K</div>
-                            <div class="stat-label">总字符数</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${Math.round(stats.avg_chars || 0)}</div>
-                            <div class="stat-label">平均长度</div>
-                        </div>
-                    </div>
-                `;
+            function formatNumber(num) {
+                if (num === undefined || num === null) return '0';
+                return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
             }
+
+            let statsHtml = `
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value">${formatNumber(summary.text_total_chars || stats.total_chars || 0)}</div>
+                        <div class="stat-label">📄 文本总量（字符）</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${summary.text_chunk_count || stats.total_count || 0}</div>
+                        <div class="stat-label">📊 文本片段</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${summary.vector_stored_count || vectorStats.stored_count || 0}</div>
+                        <div class="stat-label">🗄️ 向量数据库记录</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">${vectorStats.verification_success ? '✅' : '⏳'}</div>
+                        <div class="stat-label">${vectorStats.verification_success ? '已验证' : '处理中'}</div>
+                    </div>
+                </div>
+            `;
 
             resultContent.innerHTML = `
                 <div class="result-success">
@@ -566,7 +574,7 @@
                     ${statsHtml}
                     <p style="margin-top: 15px; font-weight: 600;">
                         🎉 文档已成功向量化并存储到数据库！
-                        <a href="/search" style="color: #667eea; text-decoration: underline;">去搜索测试 →</a>
+                        <a href="/chat" style="color: #667eea; text-decoration: underline;">去对话测试 →</a>
                     </p>
                 </div>
             `;
