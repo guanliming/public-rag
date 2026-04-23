@@ -32,6 +32,7 @@ from langchain_core.documents import Document
 from src.database.vector_db import DatabaseConfig, DatabaseManager, VectorStore
 from src.document.processor import DocumentProcessor, SupportedFormats
 from src.embedding.embedder import get_embedding_model, EmbeddingConfig
+from src.llm import get_llm, LLMConfig
 from dotenv import load_dotenv
 
 # 加载环境变量
@@ -189,6 +190,44 @@ def get_document_processor() -> Optional[DocumentProcessor]:
     return global_store.get("document_processor")
 
 
+def get_retrieval_k() -> int:
+    """
+    获取检索结果数量配置
+
+    Returns:
+        int: 检索结果数量
+    """
+    return int(os.getenv("RETRIEVAL_K", "5"))
+
+
+def clear_vector_store() -> bool:
+    """
+    清空向量存储中的所有文档
+
+    每次上传新文档前调用此函数，确保只使用最新上传的资料。
+
+    Returns:
+        bool: 是否成功清空
+    """
+    vector_store = get_vector_store()
+    if vector_store is None:
+        return False
+
+    try:
+        db_manager = global_store.get("db_manager")
+        if db_manager:
+            with db_manager.get_connection() as conn:
+                cursor = conn.cursor()
+                table_name = vector_store.config.table_name
+                cursor.execute(f"DELETE FROM {table_name}")
+                conn.commit()
+                print(f"已清空向量表 {table_name} 中的所有数据")
+        return True
+    except Exception as e:
+        print(f"清空向量存储时出错: {e}")
+        return False
+
+
 def register_api_routes(bp: Blueprint) -> None:
     """
     注册 API 路由
@@ -318,12 +357,24 @@ def register_api_routes(bp: Blueprint) -> None:
                     "stats": stats,
                 }), 500
 
+            # 清空之前的文档（确保只使用最新上传的资料）
+            print("正在清空之前的文档数据...")
+            clear_vector_store()
+            print("已清空之前的文档，准备存储新文档")
+
             # 存储到向量数据库
             document_ids = vector_store.add_documents(documents)
 
+            # 记录当前上传的文件名
+            global_store["current_document"] = {
+                "file_name": filename,
+                "upload_time": datetime.now().isoformat(),
+                "total_chunks": len(documents),
+            }
+
             return jsonify({
                 "success": True,
-                "message": "文档上传并处理成功",
+                "message": "文档上传并处理成功（已替换之前的文档）",
                 "data": {
                     "original_name": filename,
                     "stored_name": unique_filename,
@@ -436,6 +487,121 @@ def register_api_routes(bp: Blueprint) -> None:
                 "message": f"检索时出错: {str(e)}",
             }), 500
 
+    @bp.route("/chat", methods=["POST"])
+    def chat_with_rag():
+        """
+        RAG 对话问答接口
+
+        这是核心对话接口，执行以下步骤：
+        1. 接收用户问题
+        2. 在向量数据库中检索相关文档片段
+        3. 将检索到的内容和用户问题组合成提示词
+        4. 调用阿里百炼大模型生成回答
+        5. 返回格式化的回答
+
+        Request:
+            Content-Type: application/json
+            Body: {
+                "query": "用户的问题",
+                "k": 5,  # 可选，检索结果数量，默认从环境变量读取
+            }
+
+        Returns:
+            JSON: {
+                "success": true,
+                "data": {
+                    "query": "用户的问题",
+                    "answer": "模型生成的回答",
+                    "source_type": "参考资料" | "大模型内置知识" | "未知",
+                    "retrieved_contexts": [
+                        {
+                            "content": "文档片段内容",
+                            "score": 0.85,
+                            "metadata": {...}
+                        },
+                        ...
+                    ],
+                    "current_document": {
+                        "file_name": "当前使用的文档名",
+                        "upload_time": "上传时间"
+                    }
+                }
+            }
+        """
+        data = request.get_json()
+
+        if not data or "query" not in data:
+            return jsonify({
+                "success": False,
+                "message": "缺少查询参数",
+            }), 400
+
+        query = data["query"]
+        k = data.get("k", get_retrieval_k())
+
+        vector_store = get_vector_store()
+        if vector_store is None:
+            return jsonify({
+                "success": False,
+                "message": "向量存储未初始化，请先上传文档",
+            }), 500
+
+        try:
+            print(f"执行 RAG 检索，查询: {query}")
+
+            results = vector_store.similarity_search_with_score(
+                query=query,
+                k=k,
+            )
+
+            formatted_results = []
+            for doc, score in results:
+                formatted_results.append({
+                    "content": doc.page_content,
+                    "score": float(score),
+                    "metadata": doc.metadata,
+                })
+
+            print(f"检索到 {len(formatted_results)} 个相关片段")
+
+            try:
+                llm = get_llm()
+                print(f"调用阿里百炼模型生成回答...")
+
+                rag_result = llm.rag_query(
+                    user_query=query,
+                    retrieved_docs=formatted_results,
+                )
+
+                return jsonify({
+                    "success": True,
+                    "data": {
+                        "query": query,
+                        "answer": rag_result["answer"],
+                        "source_type": rag_result["source_type"],
+                        "retrieved_contexts": formatted_results,
+                        "current_document": global_store.get("current_document"),
+                    },
+                })
+
+            except Exception as llm_error:
+                print(f"LLM 调用失败: {llm_error}")
+                return jsonify({
+                    "success": False,
+                    "message": f"大模型调用失败: {str(llm_error)}",
+                    "debug_info": {
+                        "retrieved_count": len(formatted_results),
+                        "error_type": type(llm_error).__name__,
+                    },
+                }), 500
+
+        except Exception as e:
+            print(f"对话处理出错: {e}")
+            return jsonify({
+                "success": False,
+                "message": f"处理对话时出错: {str(e)}",
+            }), 500
+
     @bp.route("/stats", methods=["GET"])
     def get_stats():
         """
@@ -456,12 +622,22 @@ def register_api_routes(bp: Blueprint) -> None:
                     "embedding_config": {
                         "model_type": "local",
                         "model_name": "all-MiniLM-L6-v2"
-                    }
+                    },
+                    "llm_config": {
+                        "model": "qwen3.6-35b-a3b"
+                    },
+                    "current_document": {...}
                 }
             }
         """
         db_config = global_store.get("db_config")
         embedding_config = EmbeddingConfig.from_env()
+
+        try:
+            llm_config = LLMConfig.from_env()
+            llm_model = llm_config.model
+        except Exception:
+            llm_model = None
 
         return jsonify({
             "success": True,
@@ -477,6 +653,10 @@ def register_api_routes(bp: Blueprint) -> None:
                     "model_type": embedding_config.model_type.value,
                     "model_name": embedding_config.model_name,
                 },
+                "llm_config": {
+                    "model": llm_model,
+                },
+                "current_document": global_store.get("current_document"),
             },
         })
 
@@ -526,3 +706,15 @@ def register_page_routes(bp: Blueprint) -> None:
             HTML: 渲染后的 search.html 页面
         """
         return render_template("search.html")
+
+    @bp.route("/chat", methods=["GET"])
+    def chat_page():
+        """
+        对话页面路由
+
+        渲染 RAG 对话测试页面，包含上传和对话功能。
+
+        Returns:
+            HTML: 渲染后的 chat.html 页面
+        """
+        return render_template("chat.html")

@@ -172,12 +172,12 @@
                     <div class="feature-card">
                         <div class="feature-icon">📄</div>
                         <h3>文档上传</h3>
-                        <p>支持 PDF、Markdown、纯文本等多种格式的文档上传和解析</p>
+                        <p>支持 PDF、纯文本格式的文档上传和解析</p>
                     </div>
                     <div class="feature-card">
-                        <div class="feature-icon">🔍</div>
-                        <h3>智能检索</h3>
-                        <p>基于向量相似度的语义检索，找到最相关的文档片段</p>
+                        <div class="feature-icon">🤖</div>
+                        <h3>智能对话</h3>
+                        <p>基于阿里百炼大模型，支持 RAG 增强的智能问答</p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon">⚡</div>
@@ -187,7 +187,10 @@
                 </div>
 
                 <div class="action-buttons">
-                    <a href="/upload" class="btn btn-primary">
+                    <a href="/chat" class="btn btn-primary">
+                        💬 开始对话
+                    </a>
+                    <a href="/upload" class="btn btn-secondary">
                         📤 上传文档
                     </a>
                     <a href="/search" class="btn btn-secondary">
@@ -200,11 +203,11 @@
         <div class="footer">
             <p>技术栈</p>
             <div class="tech-stack">
+                <span class="tech-badge">阿里百炼</span>
                 <span class="tech-badge">LangChain</span>
                 <span class="tech-badge">PostgreSQL</span>
                 <span class="tech-badge">pgvector</span>
                 <span class="tech-badge">Flask</span>
-                <span class="tech-badge">sentence-transformers</span>
             </div>
         </div>
     </div>
