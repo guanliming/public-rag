@@ -223,15 +223,10 @@ def clear_vector_store() -> bool:
         return False
 
     try:
-        db_manager = global_store.get("db_manager")
-        if db_manager:
-            with db_manager.get_connection() as conn:
-                cursor = conn.cursor()
-                table_name = vector_store.config.table_name
-                cursor.execute(f"DELETE FROM {table_name}")
-                conn.commit()
-                print(f"已清空向量表 {table_name} 中的所有数据")
-        return True
+        result = vector_store.clear_collection()
+        if result:
+            print(f"已清空集合 {vector_store.config.table_name} 中的所有数据")
+        return result
     except Exception as e:
         print(f"清空向量存储时出错: {e}")
         return False
@@ -372,27 +367,64 @@ def register_api_routes(bp: Blueprint) -> None:
             print("已清空之前的文档，准备存储新文档")
 
             # 存储到向量数据库
+            print("正在向量化并存储到向量数据库...")
             document_ids = vector_store.add_documents(documents)
+            print(f"调用 add_documents 返回了 {len(document_ids)} 个文档 ID")
+
+            # 验证文档是否真的存储到向量数据库
+            print("正在验证数据是否成功存储...")
+            verification = vector_store.verify_documents_stored(document_ids)
+            print(f"验证结果: {verification['message']}")
+
+            # 获取向量数据库统计信息
+            vector_stats = vector_store.get_collection_stats()
+            print(f"向量数据库统计: {vector_stats}")
 
             # 记录当前上传的文件名
             global_store["current_document"] = {
                 "file_name": filename,
                 "upload_time": datetime.now().isoformat(),
                 "total_chunks": len(documents),
+                "stored_in_vector_db": verification["stored_count"],
+                "total_chars": stats.get("total_chars", 0),
             }
 
-            return jsonify({
-                "success": True,
-                "message": "文档上传并处理成功（已替换之前的文档）",
-                "data": {
-                    "original_name": filename,
-                    "stored_name": unique_filename,
-                    "file_path": file_path,
-                    "total_chunks": len(documents),
-                    "document_ids": document_ids,
-                    "stats": stats,
+            # 准备返回数据
+            response_data = {
+                "original_name": filename,
+                "stored_name": unique_filename,
+                "file_path": file_path,
+                "total_chunks": len(documents),
+                "document_ids": document_ids,
+                "stats": stats,
+                "vector_stats": {
+                    "stored_count": verification["stored_count"],
+                    "verification_success": verification["success"],
+                    "verification_message": verification["message"],
+                    "total_documents_in_db": vector_stats.get("total_documents", 0),
+                    "collection_documents": vector_stats.get("collection_documents", 0),
+                    "collection_name": vector_stats.get("collection_name"),
                 },
-            })
+                "summary": {
+                    "text_total_chars": stats.get("total_chars", 0),
+                    "text_chunk_count": len(documents),
+                    "vector_stored_count": verification["stored_count"],
+                    "vector_verified": verification["success"],
+                }
+            }
+
+            if verification["success"]:
+                return jsonify({
+                    "success": True,
+                    "message": f"文档上传并处理成功！文本总量: {stats.get('total_chars', 0)} 字符，向量数据库: {verification['stored_count']} 条记录",
+                    "data": response_data,
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "message": f"文档处理完成但验证失败: {verification['message']}",
+                    "data": response_data,
+                }), 500
 
         except Exception as e:
             # 清理保存的文件（如果有）

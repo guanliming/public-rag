@@ -526,6 +526,160 @@ class VectorStore:
             search_kwargs=search_kwargs or {},
         )
 
+    def get_document_count(self) -> int:
+        """
+        获取向量数据库中的文档数量
+
+        直接查询数据库表中的记录数，用于验证数据是否成功存储。
+
+        Returns:
+            int: 文档数量
+
+        示例:
+            >>> count = vector_store.get_document_count()
+            >>> print(f"向量数据库中有 {count} 条记录")
+        """
+        try:
+            with psycopg2.connect(self.config.connection_string) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM langchain_pg_embedding")
+                result = cursor.fetchone()
+                return result[0] if result else 0
+        except Exception as e:
+            print(f"获取文档数量时出错: {e}")
+            return -1
+
+    def get_collection_stats(self) -> Dict[str, Any]:
+        """
+        获取集合统计信息
+
+        返回当前集合的详细统计信息，包括文档数量、集合信息等。
+
+        Returns:
+            Dict[str, Any]: 统计信息字典
+        """
+        try:
+            with psycopg2.connect(self.config.connection_string) as conn:
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+                cursor.execute(
+                    "SELECT id, name FROM langchain_pg_collection WHERE name = %s",
+                    (self.config.table_name,)
+                )
+                collection = cursor.fetchone()
+
+                cursor.execute("SELECT COUNT(*) FROM langchain_pg_embedding")
+                total_count = cursor.fetchone()[0]
+
+                if collection:
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM langchain_pg_embedding WHERE collection_id = %s",
+                        (str(collection["id"]),)
+                    )
+                    collection_count = cursor.fetchone()[0]
+                else:
+                    collection_count = 0
+
+                return {
+                    "total_documents": total_count,
+                    "collection_documents": collection_count,
+                    "collection_name": self.config.table_name,
+                    "collection_id": str(collection["id"]) if collection else None,
+                    "table_exists": True,
+                }
+        except Exception as e:
+            print(f"获取集合统计时出错: {e}")
+            return {
+                "total_documents": -1,
+                "collection_documents": -1,
+                "collection_name": self.config.table_name,
+                "collection_id": None,
+                "table_exists": False,
+                "error": str(e),
+            }
+
+    def verify_documents_stored(self, expected_ids: List[str] = None) -> Dict[str, Any]:
+        """
+        验证文档是否成功存储到向量数据库
+
+        Args:
+            expected_ids: 期望存储的文档 ID 列表（可选）
+
+        Returns:
+            Dict[str, Any]: 验证结果，包含：
+                - success: 是否验证成功
+                - stored_count: 实际存储的数量
+                - expected_count: 期望的数量（如果提供了 expected_ids）
+                - missing_ids: 缺失的文档 ID（如果提供了 expected_ids）
+                - message: 验证消息
+        """
+        stats = self.get_collection_stats()
+        stored_count = stats.get("collection_documents", 0)
+
+        result = {
+            "success": False,
+            "stored_count": stored_count,
+            "expected_count": len(expected_ids) if expected_ids else None,
+            "missing_ids": [],
+            "message": "",
+        }
+
+        if expected_ids:
+            expected_count = len(expected_ids)
+            result["expected_count"] = expected_count
+
+            if stored_count == expected_count:
+                result["success"] = True
+                result["message"] = f"验证成功：期望存储 {expected_count} 条，实际存储 {stored_count} 条"
+            elif stored_count > 0:
+                result["success"] = False
+                result["message"] = f"数量不匹配：期望 {expected_count} 条，实际 {stored_count} 条"
+            else:
+                result["success"] = False
+                result["message"] = "验证失败：没有文档存储到向量数据库"
+        else:
+            if stored_count > 0:
+                result["success"] = True
+                result["message"] = f"验证成功：向量数据库中有 {stored_count} 条记录"
+            else:
+                result["success"] = False
+                result["message"] = "验证失败：向量数据库中没有记录"
+
+        return result
+
+    def clear_collection(self) -> bool:
+        """
+        清空当前集合中的所有文档
+
+        Returns:
+            bool: 是否成功清空
+        """
+        try:
+            with psycopg2.connect(self.config.connection_string) as conn:
+                cursor = conn.cursor()
+
+                cursor.execute(
+                    "SELECT id FROM langchain_pg_collection WHERE name = %s",
+                    (self.config.table_name,)
+                )
+                collection = cursor.fetchone()
+
+                if collection:
+                    collection_id = str(collection[0])
+                    cursor.execute(
+                        "DELETE FROM langchain_pg_embedding WHERE collection_id = %s",
+                        (collection_id,)
+                    )
+                    conn.commit()
+                    print(f"已清空集合 {self.config.table_name} 中的所有文档")
+                    return True
+                else:
+                    print(f"集合 {self.config.table_name} 不存在")
+                    return False
+        except Exception as e:
+            print(f"清空集合时出错: {e}")
+            return False
+
 
 def init_database(config: DatabaseConfig) -> tuple[DatabaseManager, VectorStore]:
     """
