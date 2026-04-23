@@ -310,18 +310,35 @@ def register_api_routes(bp: Blueprint) -> None:
                 "message": "没有选择文件",
             }), 400
 
-        # 检查文件格式
-        filename = secure_filename(file.filename)
-        _, ext = os.path.splitext(filename)
-        if SupportedFormats.from_extension(ext) is None:
+        # 从原始文件名提取扩展名（中文文件名需要先检查）
+        original_filename = file.filename
+        _, original_ext = os.path.splitext(original_filename)
+
+        # 检查文件格式（使用原始文件名的扩展名）
+        if SupportedFormats.from_extension(original_ext) is None:
             return jsonify({
                 "success": False,
-                "message": f"不支持的文件格式: {ext}",
+                "message": f"不支持的文件格式: {original_ext}",
                 "supported_formats": SupportedFormats.get_supported_extensions(),
             }), 400
 
+        # 使用 secure_filename 处理文件名，但处理中文文件名的情况
+        safe_filename = secure_filename(original_filename)
+        
+        # 如果 secure_filename 返回空（比如中文文件名），使用原始文件名的 base64 编码或直接保留原始名
+        if not safe_filename or safe_filename == "":
+            # 从原始文件名提取纯文件名（不含路径）
+            import re
+            # 只保留文件名部分，去除路径
+            base_name = os.path.basename(original_filename)
+            # 替换不安全字符为下划线
+            safe_filename = re.sub(r'[^\w\.\-]', '_', base_name)
+            # 如果还是空，使用默认名
+            if not safe_filename or safe_filename == "":
+                safe_filename = f"document{original_ext}"
+
         # 生成唯一文件名
-        unique_filename = f"{uuid.uuid4().hex}_{filename}"
+        unique_filename = f"{uuid.uuid4().hex}_{safe_filename}"
         file_path = os.path.join(
             request.app.config["UPLOAD_FOLDER"],
             unique_filename
@@ -331,6 +348,7 @@ def register_api_routes(bp: Blueprint) -> None:
             # 保存文件
             file.save(file_path)
             print(f"文件已保存: {file_path}")
+            print(f"原始文件名: {original_filename}, 安全文件名: {safe_filename}")
 
             # 获取文档处理器
             processor = get_document_processor()
@@ -380,9 +398,9 @@ def register_api_routes(bp: Blueprint) -> None:
             vector_stats = vector_store.get_collection_stats()
             print(f"向量数据库统计: {vector_stats}")
 
-            # 记录当前上传的文件名
+            # 记录当前上传的文件名（使用原始文件名，便于用户识别）
             global_store["current_document"] = {
-                "file_name": filename,
+                "file_name": original_filename,
                 "upload_time": datetime.now().isoformat(),
                 "total_chunks": len(documents),
                 "stored_in_vector_db": verification["stored_count"],
@@ -391,7 +409,7 @@ def register_api_routes(bp: Blueprint) -> None:
 
             # 准备返回数据
             response_data = {
-                "original_name": filename,
+                "original_name": original_filename,
                 "stored_name": unique_filename,
                 "file_path": file_path,
                 "total_chunks": len(documents),
