@@ -24,7 +24,7 @@ import uuid
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-from flask import Flask, Blueprint, request, jsonify, render_template
+from flask import Flask, Blueprint, request, jsonify, render_template, current_app
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from langchain_core.documents import Document
@@ -340,7 +340,7 @@ def register_api_routes(bp: Blueprint) -> None:
         # 生成唯一文件名
         unique_filename = f"{uuid.uuid4().hex}_{safe_filename}"
         file_path = os.path.join(
-            request.app.config["UPLOAD_FOLDER"],
+            current_app.config["UPLOAD_FOLDER"],
             unique_filename
         )
 
