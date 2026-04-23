@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>搜索测试 - RAG 测试项目</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            margin-bottom: 20px;
+        }
+
+        .search-section {
+            margin-bottom: 30px;
+        }
+
+        .search-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .search-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .search-input-group {
+            display: flex;
+            gap: 15px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .search-input::placeholder {
+            color: #aaa;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .form-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-group label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .form-select {
+            padding: 8px 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            background: white;
+            cursor: pointer;
+        }
+
+        .form-select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 15px 35px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .results-section {
+            display: none;
+        }
+
+        .results-section.show {
+            display: block;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .results-header h2 {
+            margin-bottom: 0;
+        }
+
+        .result-count {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .result-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .result-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s ease;
+        }
+
+        .result-card:hover {
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            transform: translateX(5px);
+        }
+
+        .result-rank {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .result-header-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .result-score {
+            margin-left: auto;
+        }
+
+        .score-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: #fff3e0;
+            color: #e65100;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .score-badge.high {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .score-badge.medium {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .score-badge.low {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .result-content {
+            color: #333;
+            line-height: 1.7;
+            font-size: 0.95rem;
+            margin-bottom: 15px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .result-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .meta-badge {
+            background: white;
+            border: 1px solid #e0e0e0;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            color: #666;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .meta-badge strong {
+            color: #333;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .no-results-icon {
+            font-size: 4rem;
+            margin-bottom: 15px;
+        }
+
+        .no-results h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e0e0e0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading p {
+            color: #666;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .info-box p {
+            color: #1565c0;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .info-box p strong {
+            color: #0d47a1;
+        }
+
+        .quick-questions {
+            margin-top: 15px;
+        }
+
+        .quick-questions h4 {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
+        .quick-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .quick-tag {
+            background: #f5f5f5;
+            border: 1px solid #e0e0e0;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .quick-tag:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="nav-links">
+                <a href="/" class="nav-link">🏠 首页</a>
+                <a href="/upload" class="nav-link">📤 上传文档</a>
+                <a href="/search" class="nav-link active">🔍 搜索测试</a>
+            </div>
+            <h1>🔍 相似度检索</h1>
+            <p>输入查询，在向量数据库中查找相关的文档片段</p>
+        </div>
+
+        <div class="card">
+            <div class="search-section">
+                <h2>📝 输入查询</h2>
+
+                <div class="info-box">
+                    <p>
+                        <strong>💡 提示：</strong>
+                        这是基于向量相似度的语义检索。系统会理解查询的语义含义，
+                        而不仅仅是关键词匹配。尝试使用自然语言提问！
+                    </p>
+                </div>
+
+                <form class="search-form" id="searchForm">
+                    <div class="search-input-group">
+                        <input
+                            type="text"
+                            class="search-input"
+                            id="queryInput"
+                            placeholder="输入您的问题或关键词，例如：什么是机器学习？"
+                            required
+                        >
+                        <button type="submit" class="btn btn-primary" id="searchBtn">
+                            🔍 搜索
+                        </button>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>返回结果数量:</label>
+                            <select class="form-select" id="kSelect">
+                                <option value="3">3 条</option>
+                                <option value="5" selected>5 条</option>
+                                <option value="10">10 条</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="quick-questions">
+                        <h4>💡 快速示例（如果您已上传文档）：</h4>
+                        <div class="quick-tags">
+                            <span class="quick-tag" data-query="什么是机器学习？">什么是机器学习？</span>
+                            <span class="quick-tag" data-query="人工智能的应用">人工智能的应用</span>
+                            <span class="quick-tag" data-query="向量数据库是什么">向量数据库是什么</span>
+                            <span class="quick-tag" data-query="深度学习">深度学习</span>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div class="loading" id="loadingIndicator">
+                <div class="spinner"></div>
+                <p>正在检索相关文档...</p>
+            </div>
+
+            <div class="results-section" id="resultsSection">
+                <div class="results-header">
+                    <h2>📋 检索结果</h2>
+                    <span class="result-count" id="resultCount">找到 0 条结果</span>
+                </div>
+
+                <div class="result-list" id="resultList">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM 元素引用
+        const searchForm = document.getElementById('searchForm');
+        const queryInput = document.getElementById('queryInput');
+        const kSelect = document.getElementById('kSelect');
+        const searchBtn = document.getElementById('searchBtn');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const resultsSection = document.getElementById('resultsSection');
+        const resultList = document.getElementById('resultList');
+        const resultCount = document.getElementById('resultCount');
+        const quickTags = document.querySelectorAll('.quick-tag');
+
+        // 快速标签点击事件
+        quickTags.forEach(tag => {
+            tag.addEventListener('click', () => {
+                const query = tag.getAttribute('data-query');
+                queryInput.value = query;
+                queryInput.focus();
+            });
+        });
+
+        // 表单提交事件
+        searchForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const query = queryInput.value.trim();
+            if (!query) return;
+
+            const k = parseInt(kSelect.value);
+
+            // 显示加载状态
+            loadingIndicator.classList.add('show');
+            resultsSection.classList.remove('show');
+            searchBtn.disabled = true;
+
+            try {
+                // 发送搜索请求
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        k: k
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    displayResults(result.data);
+                } else {
+                    displayError(result.message || '搜索失败');
+                }
+
+            } catch (error) {
+                console.error('搜索错误:', error);
+                displayError(error.message || '网络错误');
+            } finally {
+                loadingIndicator.classList.remove('show');
+                searchBtn.disabled = false;
+            }
+        });
+
+        // 显示搜索结果
+        function displayResults(data) {
+            const results = data.results || [];
+
+            // 更新结果计数
+            resultCount.textContent = `找到 ${results.length} 条结果`;
+
+            // 清空之前的结果
+            resultList.innerHTML = '';
+
+            if (results.length === 0) {
+                // 没有结果
+                resultList.innerHTML = `
+                    <div class="no-results">
+                        <div class="no-results-icon">🔍</div>
+                        <h3>没有找到相关文档</h3>
+                        <p>可能的原因：</p>
+                        <p style="margin-top: 10px; font-size: 0.9rem;">
+                            1. 还没有上传任何文档<br>
+                            2. 查询内容与已上传文档不相关<br>
+                            3. 尝试使用不同的关键词或表达方式
+                        </p>
+                        <p style="margin-top: 15px;">
+                            <a href="/upload" style="color: #667eea; text-decoration: underline;">
+                                先去上传文档 →
+                            </a>
+                        </p>
+                    </div>
+                `;
+            } else {
+                // 渲染结果
+                results.forEach((result, index) => {
+                    const card = createResultCard(result, index + 1);
+                    resultList.appendChild(card);
+                });
+            }
+
+            resultsSection.classList.add('show');
+        }
+
+        // 创建结果卡片
+        function createResultCard(result, rank) {
+            const card = document.createElement('div');
+            card.className = 'result-card';
+
+            // 计算分数等级
+            const score = result.score;
+            let scoreClass = 'low';
+            if (score >= 0.7) scoreClass = 'high';
+            else if (score >= 0.4) scoreClass = 'medium';
+
+            // 格式化元数据
+            const metadata = result.metadata || {};
+            const metaBadges = [];
+
+            if (metadata.file_name) {
+                metaBadges.push(`<span class="meta-badge">📄 <strong>${escapeHtml(metadata.file_name)}</strong></span>`);
+            }
+            if (metadata.format) {
+                metaBadges.push(`<span class="meta-badge">📁 ${escapeHtml(metadata.format)}</span>`);
+            }
+            if (metadata.chunk_index !== undefined) {
+                metaBadges.push(`<span class="meta-badge">📊 第 ${metadata.chunk_index + 1}/${metadata.total_chunks || '?'} 段</span>`);
+            }
+
+            card.innerHTML = `
+                <div class="result-header-row">
+                    <div class="result-rank">${rank}</div>
+                    <div class="result-score">
+                        <span class="score-badge ${scoreClass}">
+                            🎯 相似度: ${(score * 100).toFixed(1)}%
+                        </span>
+                    </div>
+                </div>
+                <div class="result-content">
+                    ${escapeHtml(result.content)}
+                </div>
+                <div class="result-meta">
+                    ${metaBadges.join('')}
+                </div>
+            `;
+
+            return card;
+        }
+
+        // 显示错误
+        function displayError(message) {
+            resultCount.textContent = '搜索出错';
+            resultList.innerHTML = `
+                <div class="no-results">
+                    <div class="no-results-icon">❌</div>
+                    <h3>搜索出错</h3>
+                    <p style="color: #c62828;">${escapeHtml(message)}</p>
+                    <p style="margin-top: 15px; font-size: 0.9rem;">
+                        请检查：<br>
+                        1. 数据库服务是否运行<br>
+                        2. pgvector 扩展是否已安装<br>
+                        3. 向量存储是否已初始化
+                    </p>
+                </div>
+            `;
+            resultsSection.classList.add('show');
+        }
+
+        // HTML 转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 自动聚焦输入框
+        queryInput.focus();
+    </script>
+</body>
+</html>
