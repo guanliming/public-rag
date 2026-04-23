@@ -57,7 +57,20 @@ import os
 from dotenv import load_dotenv
 
 # 加载环境变量
-load_dotenv()
+# 优先加载 .env.local（包含敏感信息，不会提交到 git）
+# 然后加载 .env（作为默认值）
+env_local_path = os.path.join(os.path.dirname(__file__), '.env.local')
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+
+# 先加载 .env.local（如果存在），优先级更高
+if os.path.exists(env_local_path):
+    print(f"加载配置文件: .env.local")
+    load_dotenv(env_local_path, override=True)
+
+# 再加载 .env（如果存在），作为默认值
+if os.path.exists(env_path):
+    print(f"加载配置文件: .env")
+    load_dotenv(env_path, override=False)
 
 # 从环境变量读取 Flask 配置
 FLASK_HOST = os.getenv("FLASK_HOST", "0.0.0.0")
