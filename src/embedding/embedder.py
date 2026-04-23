@@ -33,7 +33,16 @@ from langchain_core.embeddings import Embeddings
 from dotenv import load_dotenv
 
 # 加载环境变量
-load_dotenv()
+# 优先加载 .env.local（包含敏感信息，不会提交到 git）
+# 然后加载 .env（作为默认值）
+_env_local_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env.local')
+_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
+
+if os.path.exists(_env_local_path):
+    load_dotenv(_env_local_path, override=True)
+
+if os.path.exists(_env_path):
+    load_dotenv(_env_path, override=False)
 
 
 class EmbeddingModelType(Enum):
@@ -100,10 +109,10 @@ class EmbeddingConfig:
         model_type_str = os.getenv("EMBEDDING_MODEL_TYPE", "dashscope").lower()
         if model_type_str == "openai":
             model_type = EmbeddingModelType.OPENAI
-        elif model_type_str == "dashscope":
-            model_type = EmbeddingModelType.DASHSCOPE
-        else:
+        elif model_type_str == "local":
             model_type = EmbeddingModelType.LOCAL
+        else:
+            model_type = EmbeddingModelType.DASHSCOPE
 
         default_model = {
             EmbeddingModelType.LOCAL: "all-MiniLM-L6-v2",
