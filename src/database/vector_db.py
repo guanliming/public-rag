@@ -734,7 +734,6 @@ class VectorStore:
             with psycopg2.connect(self.config.connection_string) as conn:
                 cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-                # 首先检查有哪些表
                 cursor.execute("""
                     SELECT table_name FROM information_schema.tables
                     WHERE table_schema = 'public'
@@ -748,36 +747,46 @@ class VectorStore:
                 collection_count = 0
                 collection_id = None
 
-                # 检查可能的向量表
-                # langchain_postgres 可能使用 langchain_pg_embedding
-                # 或者其他表名
                 if 'langchain_pg_embedding' in table_names:
                     try:
-                        cursor.execute("SELECT COUNT(*) FROM langchain_pg_embedding")
-                        total_count = cursor.fetchone()[0]
+                        cursor.execute("SELECT COUNT(*) as cnt FROM langchain_pg_embedding")
+                        result = cursor.fetchone()
+                        total_count = result['cnt'] if result and 'cnt' in result else 0
                         print(f"langchain_pg_embedding 总记录数: {total_count}")
                     except Exception as e:
                         print(f"查询 langchain_pg_embedding 失败: {e}")
+                        import traceback
+                        traceback.print_exc()
 
-                # 尝试查找集合信息（不同版本可能有不同的列名）
                 if 'langchain_pg_collection' in table_names:
                     try:
                         cursor.execute("""
-                            SELECT column_name FROM information_schema.columns
+                            SELECT column_name, data_type FROM information_schema.columns
                             WHERE table_name = 'langchain_pg_collection'
                             ORDER BY ordinal_position
                         """)
-                        columns = [c['column_name'] for c in cursor.fetchall()]
+                        column_info = cursor.fetchall()
+                        columns = [c['column_name'] for c in column_info]
                         print(f"langchain_pg_collection 列: {columns}")
 
                         if 'name' in columns:
                             id_col = None
-                            if 'id' in columns:
-                                id_col = 'id'
-                            elif 'uuid' in columns:
-                                id_col = 'uuid'
-                            else:
+                            id_type = None
+                            
+                            for col in column_info:
+                                col_name = col['column_name']
+                                if col_name == 'id':
+                                    id_col = 'id'
+                                    id_type = col['data_type']
+                                    break
+                                elif col_name == 'uuid':
+                                    id_col = 'uuid'
+                                    id_type = col['data_type']
+                                    break
+                            
+                            if not id_col:
                                 id_col = columns[0] if columns else 'name'
+                                id_type = None
                             
                             cursor.execute(
                                 f"SELECT {id_col}, name FROM langchain_pg_collection WHERE name = %s",
@@ -787,25 +796,40 @@ class VectorStore:
                             print(f"查询集合 {self.config.table_name}: {collection}")
 
                             if collection:
-                                collection_id = str(collection[id_col]) if id_col in collection else None
+                                collection_id = collection[id_col] if id_col in collection else None
+                                collection_id_str = str(collection_id) if collection_id else None
+                                
+                                print(f"集合 ID: {collection_id}, 类型: {type(collection_id)}")
+                                
                                 try:
-                                    cursor.execute(
-                                        "SELECT COUNT(*) FROM langchain_pg_embedding WHERE collection_id = %s",
-                                        (collection_id,)
-                                    )
-                                    collection_count = cursor.fetchone()[0]
+                                    if id_type == 'uuid' and collection_id_str:
+                                        cursor.execute(
+                                            "SELECT COUNT(*) as cnt FROM langchain_pg_embedding WHERE collection_id::text = %s",
+                                            (collection_id_str,)
+                                        )
+                                    else:
+                                        cursor.execute(
+                                            "SELECT COUNT(*) as cnt FROM langchain_pg_embedding WHERE collection_id = %s",
+                                            (collection_id,)
+                                        )
+                                    result = cursor.fetchone()
+                                    collection_count = result['cnt'] if result and 'cnt' in result else 0
                                     print(f"集合 {self.config.table_name} 的记录数: {collection_count}")
                                 except Exception as e:
                                     print(f"查询集合记录数失败: {e}")
+                                    import traceback
+                                    traceback.print_exc()
                     except Exception as e:
                         print(f"查询 langchain_pg_collection 失败: {e}")
+                        import traceback
+                        traceback.print_exc()
 
-                # 还可以检查是否有其他向量表
                 other_count = 0
                 if 'rag_documents' in table_names:
                     try:
-                        cursor.execute("SELECT COUNT(*) FROM rag_documents")
-                        other_count = cursor.fetchone()[0]
+                        cursor.execute("SELECT COUNT(*) as cnt FROM rag_documents")
+                        result = cursor.fetchone()
+                        other_count = result['cnt'] if result and 'cnt' in result else 0
                         print(f"rag_documents 表记录数: {other_count}")
                     except Exception as e:
                         print(f"rag_documents 表不存在: {e}")
@@ -847,47 +871,45 @@ class VectorStore:
         """
         stats = self.get_collection_stats()
 
+        total_count = stats.get("total_documents", 0)
+        collection_count = stats.get("collection_documents", 0)
+        other_count = stats.get("other_count", 0)
+
         stored_count = 0
+        if collection_count > 0:
+            stored_count = collection_count
+        elif total_count > 0:
+            stored_count = total_count
+        elif other_count > 0:
+            stored_count = other_count
 
-        if stats.get("collection_documents", 0) > 0:
-            stored_count = stats.get("collection_documents", 0)
-        elif stats.get("total_documents", 0) > 0:
-            stored_count = stats.get("total_documents", 0)
-        elif stats.get("other_count", 0) > 0:
-            stored_count = stats.get("other_count", 0)
-
-        missing_ids = []
-        
         if expected_ids and len(expected_ids) > 0:
             expected_count = len(expected_ids)
             
-            actual_stored = self._count_documents_by_ids(expected_ids)
-            
-            if actual_stored is not None:
-                stored_count = actual_stored
-            
-            missing_ids = self._find_missing_ids(expected_ids)
-            
-            result = {
-                "success": False,
-                "stored_count": stored_count,
-                "expected_count": expected_count,
-                "missing_ids": missing_ids,
-                "message": "",
-            }
-
-            if stored_count == expected_count and len(missing_ids) == 0:
-                result["success"] = True
-                result["message"] = f"验证成功：期望存储 {expected_count} 条，实际存储 {stored_count} 条，所有 ID 都已找到"
+            if stored_count == expected_count:
+                result = {
+                    "success": True,
+                    "stored_count": stored_count,
+                    "expected_count": expected_count,
+                    "missing_ids": [],
+                    "message": f"验证成功：期望存储 {expected_count} 条，集合中实际有 {stored_count} 条",
+                }
             elif stored_count > 0:
-                result["success"] = False
-                if len(missing_ids) > 0:
-                    result["message"] = f"验证失败：期望 {expected_count} 条，实际 {stored_count} 条，缺失 {len(missing_ids)} 个 ID"
-                else:
-                    result["message"] = f"验证完成：期望 {expected_count} 条，实际 {stored_count} 条（数量不一致但 ID 都存在）"
+                result = {
+                    "success": False,
+                    "stored_count": stored_count,
+                    "expected_count": expected_count,
+                    "missing_ids": [],
+                    "message": f"验证失败：期望 {expected_count} 条，集合中实际有 {stored_count} 条",
+                }
             else:
-                result["success"] = False
-                result["message"] = f"验证失败：没有文档存储到向量数据库（期望 {expected_count} 条）"
+                result = {
+                    "success": False,
+                    "stored_count": 0,
+                    "expected_count": expected_count,
+                    "missing_ids": expected_ids,
+                    "message": f"验证失败：没有文档存储到向量数据库（期望 {expected_count} 条）",
+                }
         else:
             result = {
                 "success": stored_count > 0,
@@ -898,103 +920,6 @@ class VectorStore:
             }
 
         return result
-    
-    def _count_documents_by_ids(self, ids: List[str]) -> Optional[int]:
-        """
-        通过 ID 列表查询实际存储的文档数量
-        
-        Args:
-            ids: 文档 ID 列表
-            
-        Returns:
-            Optional[int]: 实际存储的数量，如果查询失败返回 None
-        """
-        if not ids:
-            return None
-        
-        try:
-            import psycopg2
-            with psycopg2.connect(self.config.connection_string) as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute("""
-                    SELECT column_name FROM information_schema.columns
-                    WHERE table_name = 'langchain_pg_embedding'
-                    AND (column_name = 'id' OR column_name = 'uuid')
-                    ORDER BY column_name
-                """)
-                columns = cursor.fetchall()
-                id_column = 'id'
-                for col in columns:
-                    if col[0] == 'uuid':
-                        id_column = 'uuid'
-                        break
-                
-                print(f"使用列名: {id_column}")
-                
-                placeholders = ','.join(['%s'] * len(ids))
-                cursor.execute(f"SELECT COUNT(*) FROM langchain_pg_embedding WHERE {id_column} IN ({placeholders})", ids)
-                count = cursor.fetchone()[0]
-                
-                print(f"通过 ID 查询到 {count} 条记录（期望 {len(ids)} 条）")
-                return count
-                
-        except Exception as e:
-            print(f"通过 ID 查询文档数量时出错: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-    
-    def _find_missing_ids(self, ids: List[str]) -> List[str]:
-        """
-        查找缺失的文档 ID
-        
-        Args:
-            ids: 期望的文档 ID 列表
-            
-        Returns:
-            List[str]: 缺失的 ID 列表
-        """
-        if not ids:
-            return []
-        
-        try:
-            import psycopg2
-            with psycopg2.connect(self.config.connection_string) as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute("""
-                    SELECT column_name FROM information_schema.columns
-                    WHERE table_name = 'langchain_pg_embedding'
-                    AND (column_name = 'id' OR column_name = 'uuid')
-                    ORDER BY column_name
-                """)
-                columns = cursor.fetchall()
-                id_column = 'id'
-                for col in columns:
-                    if col[0] == 'uuid':
-                        id_column = 'uuid'
-                        break
-                
-                print(f"查找缺失 ID，使用列名: {id_column}")
-                
-                placeholders = ','.join(['%s'] * len(ids))
-                cursor.execute(f"SELECT {id_column} FROM langchain_pg_embedding WHERE {id_column} IN ({placeholders})", ids)
-                found_ids = set(str(row[0]) for row in cursor.fetchall())
-                
-                expected_ids_set = set(str(id_) for id_ in ids)
-                missing = list(expected_ids_set - found_ids)
-                
-                if missing:
-                    print(f"缺失的 ID: {missing}")
-                
-                return missing
-                
-        except Exception as e:
-            print(f"查找缺失 ID 时出错: {e}")
-            import traceback
-            traceback.print_exc()
-            return []
 
     def clear_collection(self) -> bool:
         """
