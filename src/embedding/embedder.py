@@ -413,155 +413,22 @@ class EmbeddingFactory:
 
             dashscope.api_key = api_key
 
-            use_free_models = os.getenv("USE_FREE_EMBEDDING_MODELS", "true").lower() == "true"
-            
-            if use_free_models:
-                print(f"正在初始化阿里百炼嵌入模型（使用免费模型自动降级模式）...")
-                print(f"免费模型列表（按优先级）: {cls.FREE_EMBEDDING_MODELS}")
-            else:
-                print(f"正在初始化阿里百炼嵌入模型: {config.model_name}...")
+            print(f"正在初始化阿里百炼嵌入模型: {config.model_name}...")
 
             class DashScopeEmbeddings(Embeddings):
                 """
                 阿里百炼嵌入模型封装类
 
                 实现 LangChain Embeddings 接口，使用 DashScope API 进行向量化。
-                支持免费模型自动降级：当一个模型额度不足时，自动切换到下一个模型。
+                严格使用配置中指定的模型，不进行自动降级。
                 """
 
-                def __init__(self, model: str, api_key: str, use_free_models: bool = True):
+                def __init__(self, model: str, api_key: str):
                     self.api_key = api_key
                     dashscope.api_key = api_key
                     self.batch_size = 10
-                    self.use_free_models = use_free_models
-                    
-                    if use_free_models:
-                        self.models = EmbeddingFactory.FREE_EMBEDDING_MODELS.copy()
-                        self.current_model_index = 0
-                        self._exhausted_models = set()
-                        self.model = self.models[0]
-                        print(f"初始使用模型: {self.model}")
-                    else:
-                        self.models = [model]
-                        self.current_model_index = 0
-                        self._exhausted_models = set()
-                        self.model = model
-
-                def _try_next_model(self) -> bool:
-                    """
-                    尝试切换到下一个可用模型
-
-                    Returns:
-                        bool: True 表示成功切换到下一个模型，False 表示没有更多模型可用
-                    """
-                    if not self.use_free_models:
-                        return False
-                    
-                    self._exhausted_models.add(self.model)
-                    
-                    next_index = self.current_model_index + 1
-                    while next_index < len(self.models):
-                        candidate_model = self.models[next_index]
-                        if candidate_model not in self._exhausted_models:
-                            self.current_model_index = next_index
-                            self.model = candidate_model
-                            print(f"模型 {self.models[self.current_model_index - 1]} 额度不足，切换到下一个模型: {self.model}")
-                            return True
-                        next_index += 1
-                    
-                    return False
-
-                def _check_all_models_exhausted(self) -> None:
-                    """
-                    检查是否所有模型都已用尽，如果是则抛出异常
-                    """
-                    if len(self._exhausted_models) >= len(self.models):
-                        raise Exception(
-                            "百炼向量化额度不够：所有免费嵌入模型的额度都已用尽。"
-                            f"已尝试的模型: {list(self._exhausted_models)}"
-                        )
-
-                def _call_multimodal_embedding_api(
-                    self, 
-                    texts: List[str]
-                ) -> List[List[float]]:
-                    """
-                    调用多模态嵌入 API
-
-                    Args:
-                        texts: 文本列表
-
-                    Returns:
-                        List[List[float]]: 向量列表
-                    """
-                    input_data = [{'text': text} for text in texts]
-                    
-                    model_config = EmbeddingFactory.MULTIMODAL_EMBEDDING_MODELS.get(self.model, {})
-                    default_dim = model_config.get("default_dim", 1024)
-                    
-                    kwargs = {}
-                    if self.model == "qwen3-vl-embedding":
-                        kwargs["enable_fusion"] = False
-                    
-                    if self.model in ["tongyi-embedding-vision-plus-2026-03-06", "tongyi-embedding-vision-flash-2026-03-06", "qwen3-vl-embedding", "qwen2.5-vl-embedding"]:
-                        kwargs["dimension"] = default_dim
-                    
-                    resp = dashscope.MultiModalEmbedding.call(
-                        model=self.model,
-                        input=input_data,
-                        **kwargs
-                    )
-                    
-                    if resp.status_code == 200:
-                        output = resp.output
-                        if isinstance(output, dict):
-                            embeddings_list = output.get('embeddings', [])
-                            batch_embeddings = [
-                                item.get('embedding', []) if isinstance(item, dict) else item.embedding
-                                for item in embeddings_list
-                            ]
-                        else:
-                            batch_embeddings = [item.embedding for item in output.embeddings]
-                        return batch_embeddings
-                    else:
-                        error_msg = f"{resp.code} - {resp.message}"
-                        raise Exception(error_msg)
-
-                def _call_text_embedding_api(
-                    self, 
-                    texts: List[str], 
-                    text_type: str = "document"
-                ) -> List[List[float]]:
-                    """
-                    调用纯文本嵌入 API
-
-                    Args:
-                        texts: 文本列表
-                        text_type: 文本类型，"document" 或 "query"
-
-                    Returns:
-                        List[List[float]]: 向量列表
-                    """
-                    resp = dashscope.TextEmbedding.call(
-                        model=self.model,
-                        input=texts,
-                        text_type=text_type
-                    )
-                    
-                    if resp.status_code == 200:
-                        output = resp.output
-                        if isinstance(output, dict):
-                            embeddings_list = output.get('embeddings', [])
-                            batch_embeddings = [
-                                item.get('embedding', []) if isinstance(item, dict) else item.embedding
-                                for item in embeddings_list
-                            ]
-                        else:
-                            batch_embeddings = [item.embedding for item in output.embeddings]
-                        return batch_embeddings
-                    else:
-                        error_msg = f"{resp.code} - {resp.message}"
-                        raise Exception(error_msg)
+                    self.model = model
+                    print(f"使用模型: {self.model}")
 
                 def _call_embedding_api(
                     self, 
@@ -569,7 +436,7 @@ class EmbeddingFactory:
                     text_type: str = "document"
                 ) -> List[List[float]]:
                     """
-                    调用嵌入 API，支持自动模型切换
+                    调用嵌入 API
 
                     Args:
                         texts: 文本列表
@@ -578,38 +445,70 @@ class EmbeddingFactory:
                     Returns:
                         List[List[float]]: 向量列表
                     """
-                    while True:
-                        self._check_all_models_exhausted()
+                    if EmbeddingFactory._is_multimodal_model(self.model):
+                        print(f"使用多模态嵌入 API: {self.model}")
                         
-                        try:
-                            if EmbeddingFactory._is_multimodal_model(self.model):
-                                print(f"使用多模态嵌入 API: {self.model}")
-                                batch_embeddings = self._call_multimodal_embedding_api(texts)
+                        input_data = [{'text': text} for text in texts]
+                        
+                        model_config = EmbeddingFactory.MULTIMODAL_EMBEDDING_MODELS.get(self.model, {})
+                        default_dim = model_config.get("default_dim", 1024)
+                        
+                        kwargs = {}
+                        if self.model == "qwen3-vl-embedding":
+                            kwargs["enable_fusion"] = False
+                        
+                        if self.model in ["tongyi-embedding-vision-plus-2026-03-06", "tongyi-embedding-vision-flash-2026-03-06", "qwen3-vl-embedding", "qwen2.5-vl-embedding"]:
+                            kwargs["dimension"] = default_dim
+                        
+                        resp = dashscope.MultiModalEmbedding.call(
+                            model=self.model,
+                            input=input_data,
+                            **kwargs
+                        )
+                        
+                        if resp.status_code == 200:
+                            output = resp.output
+                            if isinstance(output, dict):
+                                embeddings_list = output.get('embeddings', [])
+                                batch_embeddings = [
+                                    item.get('embedding', []) if isinstance(item, dict) else item.embedding
+                                    for item in embeddings_list
+                                ]
                             else:
-                                print(f"使用纯文本嵌入 API: {self.model}")
-                                batch_embeddings = self._call_text_embedding_api(texts, text_type)
-                            
+                                batch_embeddings = [item.embedding for item in output.embeddings]
                             return batch_embeddings
-                                    
-                        except Exception as e:
-                            error_str = str(e).lower()
-                            
-                            if EmbeddingFactory._is_quota_exceeded(error_str):
-                                print(f"模型 {self.model} 额度不足: {e}")
-                                if not self._try_next_model():
-                                    raise Exception(
-                                        f"百炼向量化额度不够：所有免费嵌入模型的额度都已用尽。"
-                                        f"已尝试的模型: {list(self._exhausted_models)}"
-                                    ) from e
+                        else:
+                            error_msg = f"{resp.code} - {resp.message}"
+                            raise Exception(error_msg)
+                    else:
+                        print(f"使用纯文本嵌入 API: {self.model}")
+                        
+                        resp = dashscope.TextEmbedding.call(
+                            model=self.model,
+                            input=texts,
+                            text_type=text_type
+                        )
+                        
+                        if resp.status_code == 200:
+                            output = resp.output
+                            if isinstance(output, dict):
+                                embeddings_list = output.get('embeddings', [])
+                                batch_embeddings = [
+                                    item.get('embedding', []) if isinstance(item, dict) else item.embedding
+                                    for item in embeddings_list
+                                ]
                             else:
-                                raise
+                                batch_embeddings = [item.embedding for item in output.embeddings]
+                            return batch_embeddings
+                        else:
+                            error_msg = f"{resp.code} - {resp.message}"
+                            raise Exception(error_msg)
 
                 def embed_documents(self, texts: List[str]) -> List[List[float]]:
                     """
                     对文档列表进行向量化
 
                     阿里百炼 API 限制每批最多 10 个文本，需要分批处理。
-                    支持免费模型自动降级：当一个模型额度不足时，自动切换到下一个模型。
 
                     Args:
                         texts: 文本列表
@@ -620,8 +519,7 @@ class EmbeddingFactory:
                     all_embeddings = []
                     total_texts = len(texts)
                     print(f"正在向量化 {total_texts} 个文档片段，每批 {self.batch_size} 个...")
-                    if self.use_free_models:
-                        print(f"当前使用模型: {self.model}")
+                    print(f"当前使用模型: {self.model}")
 
                     for i in range(0, total_texts, self.batch_size):
                         batch = texts[i:i + self.batch_size]
@@ -659,8 +557,6 @@ class EmbeddingFactory:
                     """
                     对查询文本进行向量化
 
-                    支持免费模型自动降级：当一个模型额度不足时，自动切换到下一个模型。
-
                     Args:
                         text: 查询文本
 
@@ -668,8 +564,7 @@ class EmbeddingFactory:
                         List[float]: 向量
                     """
                     print(f"正在对查询文本进行向量化，文本长度: {len(text)} 字符")
-                    if self.use_free_models:
-                        print(f"当前使用模型: {self.model}")
+                    print(f"当前使用模型: {self.model}")
                     
                     embeddings = self._call_embedding_api([text], "query")
                     
@@ -685,13 +580,9 @@ class EmbeddingFactory:
             embedding = DashScopeEmbeddings(
                 model=config.model_name,
                 api_key=api_key,
-                use_free_models=use_free_models
             )
 
-            if use_free_models:
-                print(f"阿里百炼嵌入模型初始化完成（免费模型自动降级模式）")
-            else:
-                print(f"阿里百炼嵌入模型初始化完成: {config.model_name}")
+            print(f"阿里百炼嵌入模型初始化完成: {config.model_name}")
             return embedding
 
         except ImportError as e:

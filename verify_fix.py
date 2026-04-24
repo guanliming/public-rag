@@ -26,12 +26,16 @@ def main():
     print("向量存储修复验证")
     print("=" * 70)
     
-    use_free = os.getenv("USE_FREE_EMBEDDING_MODELS", "true").lower() == "true"
-    print(f"\nUSE_FREE_EMBEDDING_MODELS: {use_free}")
-    if not use_free:
-        print("✅ 已禁用免费模型，将使用指定的 text-embedding-v3 模型")
-    else:
-        print("⚠️  警告: 仍在使用免费模型，可能导致维度不匹配")
+    model_name = os.getenv("EMBEDDING_MODEL_NAME", "text-embedding-v3")
+    dimension = os.getenv("EMBEDDING_DIMENSION", "1024")
+    print(f"\n当前配置:")
+    print(f"  模型: {model_name}")
+    print(f"  维度: {dimension}")
+    print(f"  ⚠️  确保模型和维度匹配！")
+    print(f"     - text-embedding-v3: 1024")
+    print(f"     - qwen3-vl-embedding: 2560")
+    print(f"     - tongyi-embedding-vision-plus-2026-03-06: 1152")
+    print(f"     - tongyi-embedding-vision-flash-2026-03-06: 768")
     
     print("\n" + "-" * 70)
     print("步骤1: 初始化嵌入模型和向量存储")
