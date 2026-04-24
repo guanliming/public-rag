@@ -320,6 +320,23 @@ class EmbeddingFactory:
         "tongyi-embedding-vision-flash-2026-03-06",
     ]
 
+    MULTIMODAL_EMBEDDING_MODELS = {
+        "qwen3-vl-embedding": {"default_dim": 2560, "enable_fusion": False},
+        "tongyi-embedding-vision-plus-2026-03-06": {"default_dim": 1152},
+        "tongyi-embedding-vision-flash-2026-03-06": {"default_dim": 768},
+        "tongyi-embedding-vision-plus": {"default_dim": 1152},
+        "tongyi-embedding-vision-flash": {"default_dim": 768},
+        "multimodal-embedding-v1": {"default_dim": 1024},
+        "qwen2.5-vl-embedding": {"default_dim": 1024},
+    }
+
+    TEXT_EMBEDDING_MODELS = {
+        "text-embedding-v1": {"default_dim": 1024},
+        "text-embedding-v2": {"default_dim": 1024},
+        "text-embedding-v3": {"default_dim": 1024},
+        "text-embedding-v4": {"default_dim": 1024},
+    }
+
     QUOTA_EXCEEDED_KEYWORDS = [
         "quota exceeded",
         "allocated quota",
@@ -328,6 +345,19 @@ class EmbeddingFactory:
         "额度不足",
         "配额超限",
     ]
+
+    @classmethod
+    def _is_multimodal_model(cls, model_name: str) -> bool:
+        """
+        检查模型是否是多模态嵌入模型
+
+        Args:
+            model_name: 模型名称
+
+        Returns:
+            bool: True 表示是多模态模型
+        """
+        return model_name in cls.MULTIMODAL_EMBEDDING_MODELS
 
     @classmethod
     def _is_quota_exceeded(cls, error_message: str) -> bool:
@@ -451,6 +481,88 @@ class EmbeddingFactory:
                             f"已尝试的模型: {list(self._exhausted_models)}"
                         )
 
+                def _call_multimodal_embedding_api(
+                    self, 
+                    texts: List[str]
+                ) -> List[List[float]]:
+                    """
+                    调用多模态嵌入 API
+
+                    Args:
+                        texts: 文本列表
+
+                    Returns:
+                        List[List[float]]: 向量列表
+                    """
+                    input_data = [{'text': text} for text in texts]
+                    
+                    model_config = EmbeddingFactory.MULTIMODAL_EMBEDDING_MODELS.get(self.model, {})
+                    default_dim = model_config.get("default_dim", 1024)
+                    
+                    kwargs = {}
+                    if self.model == "qwen3-vl-embedding":
+                        kwargs["enable_fusion"] = False
+                    
+                    if self.model in ["tongyi-embedding-vision-plus-2026-03-06", "tongyi-embedding-vision-flash-2026-03-06", "qwen3-vl-embedding", "qwen2.5-vl-embedding"]:
+                        kwargs["dimension"] = default_dim
+                    
+                    resp = dashscope.MultiModalEmbedding.call(
+                        model=self.model,
+                        input=input_data,
+                        **kwargs
+                    )
+                    
+                    if resp.status_code == 200:
+                        output = resp.output
+                        if isinstance(output, dict):
+                            embeddings_list = output.get('embeddings', [])
+                            batch_embeddings = [
+                                item.get('embedding', []) if isinstance(item, dict) else item.embedding
+                                for item in embeddings_list
+                            ]
+                        else:
+                            batch_embeddings = [item.embedding for item in output.embeddings]
+                        return batch_embeddings
+                    else:
+                        error_msg = f"{resp.code} - {resp.message}"
+                        raise Exception(error_msg)
+
+                def _call_text_embedding_api(
+                    self, 
+                    texts: List[str], 
+                    text_type: str = "document"
+                ) -> List[List[float]]:
+                    """
+                    调用纯文本嵌入 API
+
+                    Args:
+                        texts: 文本列表
+                        text_type: 文本类型，"document" 或 "query"
+
+                    Returns:
+                        List[List[float]]: 向量列表
+                    """
+                    resp = dashscope.TextEmbedding.call(
+                        model=self.model,
+                        input=texts,
+                        text_type=text_type
+                    )
+                    
+                    if resp.status_code == 200:
+                        output = resp.output
+                        if isinstance(output, dict):
+                            embeddings_list = output.get('embeddings', [])
+                            batch_embeddings = [
+                                item.get('embedding', []) if isinstance(item, dict) else item.embedding
+                                for item in embeddings_list
+                            ]
+                        else:
+                            batch_embeddings = [item.embedding for item in output.embeddings]
+                        return batch_embeddings
+                    else:
+                        error_msg = f"{resp.code} - {resp.message}"
+                        raise Exception(error_msg)
+
                 def _call_embedding_api(
                     self, 
                     texts: List[str], 
@@ -470,32 +582,14 @@ class EmbeddingFactory:
                         self._check_all_models_exhausted()
                         
                         try:
-                            resp = dashscope.TextEmbedding.call(
-                                model=self.model,
-                                input=texts,
-                                text_type=text_type
-                            )
-                            
-                            if resp.status_code == 200:
-                                output = resp.output
-                                if isinstance(output, dict):
-                                    embeddings_list = output.get('embeddings', [])
-                                    batch_embeddings = [
-                                        item.get('embedding', []) if isinstance(item, dict) else item.embedding
-                                        for item in embeddings_list
-                                    ]
-                                else:
-                                    batch_embeddings = [item.embedding for item in output.embeddings]
-                                return batch_embeddings
+                            if EmbeddingFactory._is_multimodal_model(self.model):
+                                print(f"使用多模态嵌入 API: {self.model}")
+                                batch_embeddings = self._call_multimodal_embedding_api(texts)
                             else:
-                                error_msg = f"{resp.code} - {resp.message}"
-                                
-                                if EmbeddingFactory._is_quota_exceeded(error_msg):
-                                    print(f"模型 {self.model} 额度不足: {error_msg}")
-                                    if not self._try_next_model():
-                                        raise Exception(f"百炼向量化额度不够: {error_msg}")
-                                else:
-                                    raise Exception(f"嵌入调用失败: {error_msg}")
+                                print(f"使用纯文本嵌入 API: {self.model}")
+                                batch_embeddings = self._call_text_embedding_api(texts, text_type)
+                            
+                            return batch_embeddings
                                     
                         except Exception as e:
                             error_str = str(e).lower()
