@@ -413,7 +413,32 @@ class EmbeddingFactory:
 
                         all_embeddings.extend(batch_embeddings)
 
+                        # 增加详细的批次处理日志
+                        print(f"  - 批次 {batch_num} 处理完成，获取了 {len(batch_embeddings)} 个向量")
+                        print(f"  - 当前累计向量数: {len(all_embeddings)}/{total_texts}")
+
+                        # 检查向量维度
+                        if batch_embeddings and len(batch_embeddings) > 0:
+                            vector_dim = len(batch_embeddings[0])
+                            print(f"  - 向量维度: {vector_dim}")
+
+                    # 向量化完成后的详细日志
                     print(f"向量化完成，共 {len(all_embeddings)} 个向量")
+                    print(f"处理文本总数: {total_texts}")
+                    
+                    # 验证向量数量是否与文本数量匹配
+                    if len(all_embeddings) == total_texts:
+                        print("✓ 向量数量与文本数量匹配")
+                    else:
+                        print(f"✗ 向量数量与文本数量不匹配: {len(all_embeddings)} vs {total_texts}")
+                    
+                    # 检查向量维度
+                    if all_embeddings and len(all_embeddings) > 0:
+                        vector_dim = len(all_embeddings[0])
+                        print(f"向量维度: {vector_dim}")
+                        print(f"预期维度: 1024 (text-embedding-v3)")
+                    
+                    print("向量化过程完成，准备存储到向量数据库")
                     return all_embeddings
 
                 def embed_query(self, text: str) -> List[float]:
@@ -426,12 +451,16 @@ class EmbeddingFactory:
                     Returns:
                         List[float]: 向量
                     """
+                    print(f"正在对查询文本进行向量化，文本长度: {len(text)} 字符")
+                    
                     resp = dashscope.TextEmbedding.call(
                         model=self.model,
                         input=[text],
                         text_type="query"
                     )
+                    
                     if resp.status_code != 200:
+                        print(f"查询文本向量化失败: {resp.code} - {resp.message}")
                         raise Exception(
                             f"嵌入调用失败: {resp.code} - {resp.message}"
                         )
@@ -442,10 +471,15 @@ class EmbeddingFactory:
                         embeddings_list = output.get('embeddings', [])
                         if embeddings_list:
                             first = embeddings_list[0]
-                            return first.get('embedding', []) if isinstance(first, dict) else first.embedding
+                            embedding = first.get('embedding', []) if isinstance(first, dict) else first.embedding
+                            print(f"查询文本向量化成功，向量维度: {len(embedding)}")
+                            return embedding
+                        print("查询文本向量化失败: 未返回嵌入结果")
                         return []
                     else:
-                        return output.embeddings[0].embedding
+                        embedding = output.embeddings[0].embedding
+                        print(f"查询文本向量化成功，向量维度: {len(embedding)}")
+                        return embedding
 
             embedding = DashScopeEmbeddings(
                 model=config.model_name,
