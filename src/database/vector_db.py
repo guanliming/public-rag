@@ -339,6 +339,107 @@ class VectorStore:
         self.embedding_model = embedding_model
         self.distance_strategy = distance_strategy
         self._vector_store = None
+        self._actual_embedding_dimension = None
+        
+        self._detect_embedding_dimension()
+        self._validate_vector_table()
+    
+    def _detect_embedding_dimension(self) -> int:
+        """
+        检测实际的嵌入维度
+        
+        生成一个测试嵌入来检测实际的嵌入维度，
+        确保与数据库表的维度匹配。
+        
+        Returns:
+            int: 实际的嵌入维度
+        """
+        if self._actual_embedding_dimension is not None:
+            return self._actual_embedding_dimension
+        
+        try:
+            print("检测嵌入模型的实际维度...")
+            test_embedding = self.embedding_model.embed_query("测试文本用于检测维度")
+            self._actual_embedding_dimension = len(test_embedding)
+            
+            config_dim = self.config.embedding_dimension
+            print(f"  实际嵌入维度: {self._actual_embedding_dimension}")
+            print(f"  配置的维度: {config_dim}")
+            
+            if self._actual_embedding_dimension != config_dim:
+                print(f"\n⚠️  警告: 嵌入维度不匹配!")
+                print(f"   配置维度 (EMBEDDING_DIMENSION): {config_dim}")
+                print(f"   实际维度: {self._actual_embedding_dimension}")
+                print(f"\n   这可能导致向量存储失败!")
+                print(f"   建议更新 .env 文件: EMBEDDING_DIMENSION={self._actual_embedding_dimension}")
+            
+            return self._actual_embedding_dimension
+            
+        except Exception as e:
+            print(f"检测嵌入维度时出错: {e}")
+            self._actual_embedding_dimension = self.config.embedding_dimension
+            return self._actual_embedding_dimension
+    
+    def _validate_vector_table(self) -> None:
+        """
+        验证向量表的维度是否匹配
+        
+        检查数据库中已存在的向量表的维度，
+        如果维度不匹配，需要重建表或给出警告。
+        """
+        try:
+            import psycopg2
+            
+            with psycopg2.connect(self.config.connection_string) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = 'langchain_pg_embedding'
+                """)
+                
+                if not cursor.fetchone():
+                    print("向量表不存在，将在首次使用时创建")
+                    return
+                
+                print("\n检查现有向量表的维度...")
+                
+                try:
+                    cursor.execute("""
+                        SELECT atttypmod 
+                        FROM pg_attribute 
+                        WHERE attrelid = 'langchain_pg_embedding'::regclass 
+                        AND attname = 'embedding'
+                    """)
+                    result = cursor.fetchone()
+                    
+                    if result and result[0] > -1:
+                        table_dim = result[0]
+                        actual_dim = self._actual_embedding_dimension or self.config.embedding_dimension
+                        
+                        print(f"  表中向量维度: {table_dim}")
+                        print(f"  实际嵌入维度: {actual_dim}")
+                        
+                        if table_dim != actual_dim:
+                            print(f"\n{'!' * 70}")
+                            print(f"⚠️  严重问题: 向量表维度不匹配!")
+                            print(f"   表中维度: {table_dim}")
+                            print(f"   实际嵌入维度: {actual_dim}")
+                            print(f"\n   这会导致向量插入失败!")
+                            print(f"\n   解决方案:")
+                            print(f"   1. 删除现有向量表，让系统重新创建")
+                            print(f"   2. 或者更新 .env 文件中的 EMBEDDING_DIMENSION={table_dim}")
+                            print(f"{'!' * 70}")
+                            
+                            self._recreate_vector_table = True
+                        else:
+                            print(f"✅ 向量表维度匹配: {table_dim}")
+                            
+                except Exception as e:
+                    print(f"检查表维度时出错: {e}")
+                    
+        except Exception as e:
+            print(f"验证向量表时出错: {e}")
 
     def _get_vector_store(self) -> PGVector:
         """
@@ -386,7 +487,57 @@ class VectorStore:
             ['xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx']
         """
         vector_store = self._get_vector_store()
-        return vector_store.add_documents(documents=documents, ids=ids)
+        result_ids = vector_store.add_documents(documents=documents, ids=ids)
+        
+        print(f"PGVector.add_documents 返回了 {len(result_ids)} 个 ID")
+        print(f"调用 _force_session_flush 确保数据写入...")
+        self._force_session_flush()
+        
+        return result_ids
+    
+    def _force_session_flush(self) -> None:
+        """
+        强制刷新 SQLAlchemy 会话，确保数据写入数据库
+        
+        PGVector 使用 SQLAlchemy 管理会话，
+        这个方法确保会话被正确提交或关闭，
+        使其他数据库连接能够看到写入的数据。
+        """
+        try:
+            if self._vector_store is not None:
+                if hasattr(self._vector_store, '_embedder'):
+                    embedder = self._vector_store._embedder
+                    if hasattr(embedder, 'client'):
+                        client = embedder.client
+                        if hasattr(client, 'commit'):
+                            client.commit()
+                            print("已提交 SQLAlchemy 会话")
+                        elif hasattr(client, 'close'):
+                            client.close()
+                            print("已关闭 SQLAlchemy 会话")
+                
+                if hasattr(self._vector_store, '_conn'):
+                    conn = self._vector_store._conn
+                    if hasattr(conn, 'commit'):
+                        conn.commit()
+                        print("已提交连接")
+                    elif hasattr(conn, 'close'):
+                        conn.close()
+                        print("已关闭连接")
+                
+                if hasattr(self._vector_store, 'Collection'):
+                    try:
+                        from sqlalchemy.orm import sessionmaker
+                        if hasattr(self._vector_store, '_session'):
+                            session = self._vector_store._session
+                            if session:
+                                session.commit()
+                                print("已提交会话")
+                    except Exception as e:
+                        print(f"会话提交尝试失败（非致命）: {e}")
+        
+        except Exception as e:
+            print(f"强制刷新会话时出错: {e}")
 
     def similarity_search(
         self,
@@ -611,7 +762,6 @@ class VectorStore:
                 # 尝试查找集合信息（不同版本可能有不同的列名）
                 if 'langchain_pg_collection' in table_names:
                     try:
-                        # 先获取表的列名
                         cursor.execute("""
                             SELECT column_name FROM information_schema.columns
                             WHERE table_name = 'langchain_pg_collection'
@@ -620,9 +770,15 @@ class VectorStore:
                         columns = [c['column_name'] for c in cursor.fetchall()]
                         print(f"langchain_pg_collection 列: {columns}")
 
-                        # 根据实际列名构建查询
                         if 'name' in columns:
-                            id_col = 'id' if 'id' in columns else columns[0] if columns else 'name'
+                            id_col = None
+                            if 'id' in columns:
+                                id_col = 'id'
+                            elif 'uuid' in columns:
+                                id_col = 'uuid'
+                            else:
+                                id_col = columns[0] if columns else 'name'
+                            
                             cursor.execute(
                                 f"SELECT {id_col}, name FROM langchain_pg_collection WHERE name = %s",
                                 (self.config.table_name,)
@@ -632,7 +788,6 @@ class VectorStore:
 
                             if collection:
                                 collection_id = str(collection[id_col]) if id_col in collection else None
-                                # 尝试查询集合中的文档数量
                                 try:
                                     cursor.execute(
                                         "SELECT COUNT(*) FROM langchain_pg_embedding WHERE collection_id = %s",
@@ -692,50 +847,47 @@ class VectorStore:
         """
         stats = self.get_collection_stats()
 
-        # 尝试多种方式获取存储的数量
         stored_count = 0
 
-        # 优先使用集合文档数
         if stats.get("collection_documents", 0) > 0:
             stored_count = stats.get("collection_documents", 0)
-        # 其次使用总文档数
         elif stats.get("total_documents", 0) > 0:
             stored_count = stats.get("total_documents", 0)
-        # 最后使用其他表的数量
         elif stats.get("other_count", 0) > 0:
             stored_count = stats.get("other_count", 0)
 
-        # 如果有 expected_ids，并且数据库查询失败或返回 0，
-        # 我们信任 add_documents 的返回值（因为它已经成功返回了 ID）
+        missing_ids = []
+        
         if expected_ids and len(expected_ids) > 0:
             expected_count = len(expected_ids)
-
-            # 如果数据库查询返回 0 或 -1，但我们有 expected_ids，
-            # 可能是表结构不同导致查询失败
-            if stored_count <= 0:
-                # 既然 add_documents 成功返回了 ID，我们认为存储成功
-                # 这是因为 langchain_postgres 可能使用了不同的表结构
-                print(f"数据库查询返回 {stored_count}，但 add_documents 返回了 {expected_count} 个 ID")
-                print("假设存储成功（信任 add_documents 的返回值）")
-                stored_count = expected_count
-
+            
+            actual_stored = self._count_documents_by_ids(expected_ids)
+            
+            if actual_stored is not None:
+                stored_count = actual_stored
+            
+            missing_ids = self._find_missing_ids(expected_ids)
+            
             result = {
                 "success": False,
                 "stored_count": stored_count,
                 "expected_count": expected_count,
-                "missing_ids": [],
+                "missing_ids": missing_ids,
                 "message": "",
             }
 
-            if stored_count == expected_count:
+            if stored_count == expected_count and len(missing_ids) == 0:
                 result["success"] = True
-                result["message"] = f"验证成功：期望存储 {expected_count} 条，实际存储 {stored_count} 条"
+                result["message"] = f"验证成功：期望存储 {expected_count} 条，实际存储 {stored_count} 条，所有 ID 都已找到"
             elif stored_count > 0:
-                result["success"] = True  # 只要有数据就认为成功
-                result["message"] = f"存储完成：期望 {expected_count} 条，实际 {stored_count} 条（可能是分批处理）"
+                result["success"] = False
+                if len(missing_ids) > 0:
+                    result["message"] = f"验证失败：期望 {expected_count} 条，实际 {stored_count} 条，缺失 {len(missing_ids)} 个 ID"
+                else:
+                    result["message"] = f"验证完成：期望 {expected_count} 条，实际 {stored_count} 条（数量不一致但 ID 都存在）"
             else:
                 result["success"] = False
-                result["message"] = "验证失败：没有文档存储到向量数据库"
+                result["message"] = f"验证失败：没有文档存储到向量数据库（期望 {expected_count} 条）"
         else:
             result = {
                 "success": stored_count > 0,
@@ -746,6 +898,103 @@ class VectorStore:
             }
 
         return result
+    
+    def _count_documents_by_ids(self, ids: List[str]) -> Optional[int]:
+        """
+        通过 ID 列表查询实际存储的文档数量
+        
+        Args:
+            ids: 文档 ID 列表
+            
+        Returns:
+            Optional[int]: 实际存储的数量，如果查询失败返回 None
+        """
+        if not ids:
+            return None
+        
+        try:
+            import psycopg2
+            with psycopg2.connect(self.config.connection_string) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name = 'langchain_pg_embedding'
+                    AND (column_name = 'id' OR column_name = 'uuid')
+                    ORDER BY column_name
+                """)
+                columns = cursor.fetchall()
+                id_column = 'id'
+                for col in columns:
+                    if col[0] == 'uuid':
+                        id_column = 'uuid'
+                        break
+                
+                print(f"使用列名: {id_column}")
+                
+                placeholders = ','.join(['%s'] * len(ids))
+                cursor.execute(f"SELECT COUNT(*) FROM langchain_pg_embedding WHERE {id_column} IN ({placeholders})", ids)
+                count = cursor.fetchone()[0]
+                
+                print(f"通过 ID 查询到 {count} 条记录（期望 {len(ids)} 条）")
+                return count
+                
+        except Exception as e:
+            print(f"通过 ID 查询文档数量时出错: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _find_missing_ids(self, ids: List[str]) -> List[str]:
+        """
+        查找缺失的文档 ID
+        
+        Args:
+            ids: 期望的文档 ID 列表
+            
+        Returns:
+            List[str]: 缺失的 ID 列表
+        """
+        if not ids:
+            return []
+        
+        try:
+            import psycopg2
+            with psycopg2.connect(self.config.connection_string) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name = 'langchain_pg_embedding'
+                    AND (column_name = 'id' OR column_name = 'uuid')
+                    ORDER BY column_name
+                """)
+                columns = cursor.fetchall()
+                id_column = 'id'
+                for col in columns:
+                    if col[0] == 'uuid':
+                        id_column = 'uuid'
+                        break
+                
+                print(f"查找缺失 ID，使用列名: {id_column}")
+                
+                placeholders = ','.join(['%s'] * len(ids))
+                cursor.execute(f"SELECT {id_column} FROM langchain_pg_embedding WHERE {id_column} IN ({placeholders})", ids)
+                found_ids = set(str(row[0]) for row in cursor.fetchall())
+                
+                expected_ids_set = set(str(id_) for id_ in ids)
+                missing = list(expected_ids_set - found_ids)
+                
+                if missing:
+                    print(f"缺失的 ID: {missing}")
+                
+                return missing
+                
+        except Exception as e:
+            print(f"查找缺失 ID 时出错: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
 
     def clear_collection(self) -> bool:
         """
@@ -772,7 +1021,6 @@ class VectorStore:
                 # 方式 1: langchain_pg_collection + langchain_pg_embedding
                 if 'langchain_pg_collection' in tables and 'langchain_pg_embedding' in tables:
                     try:
-                        # 获取列名
                         cursor.execute("""
                             SELECT column_name FROM information_schema.columns
                             WHERE table_name = 'langchain_pg_collection'
@@ -780,7 +1028,13 @@ class VectorStore:
                         """)
                         columns = [c[0] for c in cursor.fetchall()]
 
-                        id_col = 'id' if 'id' in columns else columns[0] if columns else 'name'
+                        id_col = None
+                        if 'id' in columns:
+                            id_col = 'id'
+                        elif 'uuid' in columns:
+                            id_col = 'uuid'
+                        else:
+                            id_col = columns[0] if columns else 'name'
 
                         cursor.execute(
                             f"SELECT {id_col} FROM langchain_pg_collection WHERE name = %s",
