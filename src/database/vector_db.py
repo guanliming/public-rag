@@ -762,7 +762,6 @@ class VectorStore:
                 # 尝试查找集合信息（不同版本可能有不同的列名）
                 if 'langchain_pg_collection' in table_names:
                     try:
-                        # 先获取表的列名
                         cursor.execute("""
                             SELECT column_name FROM information_schema.columns
                             WHERE table_name = 'langchain_pg_collection'
@@ -771,9 +770,15 @@ class VectorStore:
                         columns = [c['column_name'] for c in cursor.fetchall()]
                         print(f"langchain_pg_collection 列: {columns}")
 
-                        # 根据实际列名构建查询
                         if 'name' in columns:
-                            id_col = 'id' if 'id' in columns else columns[0] if columns else 'name'
+                            id_col = None
+                            if 'id' in columns:
+                                id_col = 'id'
+                            elif 'uuid' in columns:
+                                id_col = 'uuid'
+                            else:
+                                id_col = columns[0] if columns else 'name'
+                            
                             cursor.execute(
                                 f"SELECT {id_col}, name FROM langchain_pg_collection WHERE name = %s",
                                 (self.config.table_name,)
@@ -783,7 +788,6 @@ class VectorStore:
 
                             if collection:
                                 collection_id = str(collection[id_col]) if id_col in collection else None
-                                # 尝试查询集合中的文档数量
                                 try:
                                     cursor.execute(
                                         "SELECT COUNT(*) FROM langchain_pg_embedding WHERE collection_id = %s",
@@ -914,15 +918,22 @@ class VectorStore:
                 cursor = conn.cursor()
                 
                 cursor.execute("""
-                    SELECT table_name FROM information_schema.tables
-                    WHERE table_schema = 'public' AND table_name = 'langchain_pg_embedding'
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name = 'langchain_pg_embedding'
+                    AND (column_name = 'id' OR column_name = 'uuid')
+                    ORDER BY column_name
                 """)
-                if not cursor.fetchone():
-                    print("表 langchain_pg_embedding 不存在")
-                    return None
+                columns = cursor.fetchall()
+                id_column = 'id'
+                for col in columns:
+                    if col[0] == 'uuid':
+                        id_column = 'uuid'
+                        break
+                
+                print(f"使用列名: {id_column}")
                 
                 placeholders = ','.join(['%s'] * len(ids))
-                cursor.execute(f"SELECT COUNT(*) FROM langchain_pg_embedding WHERE id IN ({placeholders})", ids)
+                cursor.execute(f"SELECT COUNT(*) FROM langchain_pg_embedding WHERE {id_column} IN ({placeholders})", ids)
                 count = cursor.fetchone()[0]
                 
                 print(f"通过 ID 查询到 {count} 条记录（期望 {len(ids)} 条）")
@@ -930,6 +941,8 @@ class VectorStore:
                 
         except Exception as e:
             print(f"通过 ID 查询文档数量时出错: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def _find_missing_ids(self, ids: List[str]) -> List[str]:
@@ -951,14 +964,22 @@ class VectorStore:
                 cursor = conn.cursor()
                 
                 cursor.execute("""
-                    SELECT table_name FROM information_schema.tables
-                    WHERE table_schema = 'public' AND table_name = 'langchain_pg_embedding'
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name = 'langchain_pg_embedding'
+                    AND (column_name = 'id' OR column_name = 'uuid')
+                    ORDER BY column_name
                 """)
-                if not cursor.fetchone():
-                    return ids
+                columns = cursor.fetchall()
+                id_column = 'id'
+                for col in columns:
+                    if col[0] == 'uuid':
+                        id_column = 'uuid'
+                        break
+                
+                print(f"查找缺失 ID，使用列名: {id_column}")
                 
                 placeholders = ','.join(['%s'] * len(ids))
-                cursor.execute(f"SELECT id FROM langchain_pg_embedding WHERE id IN ({placeholders})", ids)
+                cursor.execute(f"SELECT {id_column} FROM langchain_pg_embedding WHERE {id_column} IN ({placeholders})", ids)
                 found_ids = set(str(row[0]) for row in cursor.fetchall())
                 
                 expected_ids_set = set(str(id_) for id_ in ids)
@@ -971,6 +992,8 @@ class VectorStore:
                 
         except Exception as e:
             print(f"查找缺失 ID 时出错: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     def clear_collection(self) -> bool:
@@ -998,7 +1021,6 @@ class VectorStore:
                 # 方式 1: langchain_pg_collection + langchain_pg_embedding
                 if 'langchain_pg_collection' in tables and 'langchain_pg_embedding' in tables:
                     try:
-                        # 获取列名
                         cursor.execute("""
                             SELECT column_name FROM information_schema.columns
                             WHERE table_name = 'langchain_pg_collection'
@@ -1006,7 +1028,13 @@ class VectorStore:
                         """)
                         columns = [c[0] for c in cursor.fetchall()]
 
-                        id_col = 'id' if 'id' in columns else columns[0] if columns else 'name'
+                        id_col = None
+                        if 'id' in columns:
+                            id_col = 'id'
+                        elif 'uuid' in columns:
+                            id_col = 'uuid'
+                        else:
+                            id_col = columns[0] if columns else 'name'
 
                         cursor.execute(
                             f"SELECT {id_col} FROM langchain_pg_collection WHERE name = %s",
