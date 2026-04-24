@@ -144,13 +144,16 @@ env.bak/
 venv.bak/
 
 # 配置文件规则
-# 敏感配置（包含密码、API密钥等，不应提交到 git）
+# 敏感配置（包含数据库连接信息、密码、API密钥等，不应提交到 git）
 .env
 .env.local
 
-# 注意：以下文件可以提交到 git：
-# - .env.example：敏感配置模板，不含实际值
-# - settings.yaml：非敏感配置，包含项目运行参数
+# 注意：
+# 1. 数据库连接信息（主机、端口、用户名、密码等）全部视为敏感信息，
+#    应配置在 .env 文件中，不应提交到 git
+# 2. 以下文件可以提交到 git：
+#    - .env.example：敏感配置模板，不含实际值
+#    - settings.yaml：非敏感配置，包含项目运行参数
 
 # Spyder project settings
 .spyderproject
