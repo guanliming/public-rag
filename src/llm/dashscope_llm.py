@@ -16,11 +16,12 @@ API 文档参考：
 
 import os
 import re
+import json
+import requests
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
 
-import dashscope
 from dotenv import load_dotenv
 
 # 加载环境变量
@@ -125,7 +126,7 @@ class DashScopeLLM:
     """
     阿里百炼 LLM 客户端
 
-    使用 DashScope API 调用大模型进行对话和生成。
+    使用直接的 HTTP 请求调用阿里百炼 API。
     """
 
     def __init__(self, config: Optional[LLMConfig] = None):
@@ -139,13 +140,11 @@ class DashScopeLLM:
             config = LLMConfig.from_env()
 
         self.config = config
-        self._setup_api()
-
-    def _setup_api(self) -> None:
-        """
-        设置 DashScope API 配置
-        """
-        dashscope.api_key = self.config.api_key
+        self.api_endpoint = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+        self.headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.config.api_key}"
+        }
 
     def generate(
         self,
@@ -171,21 +170,34 @@ class DashScopeLLM:
 
         messages.append({"role": "user", "content": prompt})
 
-        response = dashscope.Generation.call(
-            model=self.config.model,
-            messages=messages,
-            temperature=kwargs.get("temperature", self.config.temperature),
-            max_tokens=kwargs.get("max_tokens", self.config.max_tokens),
-            top_p=kwargs.get("top_p", self.config.top_p),
-            result_format="message",
+        payload = {
+            "model": self.config.model,
+            "messages": messages,
+            "temperature": kwargs.get("temperature", self.config.temperature),
+            "max_tokens": kwargs.get("max_tokens", self.config.max_tokens),
+            "top_p": kwargs.get("top_p", self.config.top_p),
+            "stream": False
+        }
+
+        response = requests.post(
+            self.api_endpoint,
+            headers=self.headers,
+            json=payload,
+            timeout=30
         )
 
         if response.status_code != 200:
+            try:
+                error_data = response.json()
+                error_message = error_data.get("error", {}).get("message", response.text)
+            except:
+                error_message = response.text
             raise Exception(
-                f"API 调用失败: {response.code} - {response.message}"
+                f"API 调用失败: {response.status_code} - {error_message}"
             )
 
-        return response.output.choices[0].message.content
+        response_data = response.json()
+        return response_data["choices"][0]["message"]["content"]
 
     def chat(
         self,
@@ -202,21 +214,34 @@ class DashScopeLLM:
         Returns:
             str: 模型生成的回复文本
         """
-        response = dashscope.Generation.call(
-            model=self.config.model,
-            messages=messages,
-            temperature=kwargs.get("temperature", self.config.temperature),
-            max_tokens=kwargs.get("max_tokens", self.config.max_tokens),
-            top_p=kwargs.get("top_p", self.config.top_p),
-            result_format="message",
+        payload = {
+            "model": self.config.model,
+            "messages": messages,
+            "temperature": kwargs.get("temperature", self.config.temperature),
+            "max_tokens": kwargs.get("max_tokens", self.config.max_tokens),
+            "top_p": kwargs.get("top_p", self.config.top_p),
+            "stream": False
+        }
+
+        response = requests.post(
+            self.api_endpoint,
+            headers=self.headers,
+            json=payload,
+            timeout=30
         )
 
         if response.status_code != 200:
+            try:
+                error_data = response.json()
+                error_message = error_data.get("error", {}).get("message", response.text)
+            except:
+                error_message = response.text
             raise Exception(
-                f"API 调用失败: {response.code} - {response.message}"
+                f"API 调用失败: {response.status_code} - {error_message}"
             )
 
-        return response.output.choices[0].message.content
+        response_data = response.json()
+        return response_data["choices"][0]["message"]["content"]
 
     def rag_query(
         self,
