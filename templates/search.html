@@ -19,7 +19,7 @@
         }
 
         .container {
-            max-width: 900px;
+            max-width: 1000px;
             margin: 0 auto;
         }
 
@@ -108,10 +108,22 @@
             color: #aaa;
         }
 
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
         .form-row {
             display: flex;
             gap: 15px;
             flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .form-row-left {
+            display: flex;
+            gap: 15px;
             align-items: center;
         }
 
@@ -144,8 +156,8 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
-            padding: 15px 35px;
+            gap: 8px;
+            padding: 15px 25px;
             border-radius: 50px;
             text-decoration: none;
             font-size: 1rem;
@@ -171,6 +183,51 @@
             cursor: not-allowed;
         }
 
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(40, 167, 69, 0.4);
+        }
+
+        .btn-success:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-outline {
+            background: white;
+            border: 2px solid #e0e0e0;
+            color: #666;
+            padding: 10px 18px;
+            font-size: 0.85rem;
+        }
+
+        .btn-outline:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .mode-hint {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-top: 10px;
+        }
+
+        .mode-hint p {
+            color: #666;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .mode-hint p strong {
+            color: #333;
+        }
+
         .results-section {
             display: none;
         }
@@ -188,6 +245,7 @@
 
         .results-header h2 {
             margin-bottom: 0;
+            font-size: 1.2rem;
         }
 
         .result-count {
@@ -398,6 +456,227 @@
             color: white;
             border-color: #667eea;
         }
+
+        .chat-section {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .chat-section.show {
+            display: block;
+        }
+
+        .chat-answer-box {
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border-radius: 16px;
+            padding: 25px;
+            border-left: 4px solid #28a745;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .chat-answer-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .chat-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: white;
+        }
+
+        .chat-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .chat-source-badge {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .chat-source-badge.reference {
+            background: rgba(40, 167, 69, 0.1);
+            color: #28a745;
+        }
+
+        .chat-source-badge.builtin {
+            background: rgba(255, 193, 7, 0.1);
+            color: #d39e00;
+        }
+
+        .chat-source-badge.unknown {
+            background: rgba(108, 117, 125, 0.1);
+            color: #6c757d;
+        }
+
+        .chat-answer-content {
+            color: #333;
+            line-height: 1.8;
+            font-size: 0.95rem;
+        }
+
+        .chat-answer-content p {
+            margin-bottom: 12px;
+        }
+
+        .chat-answer-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        .chat-answer-content code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        .chat-answer-content pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        .chat-answer-content pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .chat-answer-content ul,
+        .chat-answer-content ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .chat-answer-content li {
+            margin: 5px 0;
+        }
+
+        .chat-answer-content strong {
+            color: #333;
+        }
+
+        .retrieved-contexts-toggle {
+            margin-top: 15px;
+            padding-top: 12px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: #667eea;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .toggle-btn:hover {
+            color: #764ba2;
+        }
+
+        .retrieved-contexts {
+            display: none;
+            margin-top: 15px;
+        }
+
+        .retrieved-contexts.show {
+            display: block;
+        }
+
+        .context-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-left: 3px solid #667eea;
+        }
+
+        .context-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .context-item-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .context-item-score {
+            font-size: 0.75rem;
+            color: #666;
+        }
+
+        .context-item-content {
+            font-size: 0.85rem;
+            color: #555;
+            line-height: 1.6;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 8px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 20px 20px 0 0;
+            background: white;
+            color: #666;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            border-bottom: none;
+        }
+
+        .tab:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .tab.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -407,9 +686,10 @@
                 <a href="/" class="nav-link">🏠 首页</a>
                 <a href="/upload" class="nav-link">📤 上传文档</a>
                 <a href="/search" class="nav-link active">🔍 搜索测试</a>
+                <a href="/chat" class="nav-link">💬 对话模式</a>
             </div>
-            <h1>🔍 相似度检索</h1>
-            <p>输入查询，在向量数据库中查找相关的文档片段</p>
+            <h1>🔍 RAG 搜索与问答</h1>
+            <p>基于向量相似度的语义检索 + 百炼大模型智能问答</p>
         </div>
 
         <div class="card">
@@ -419,8 +699,9 @@
                 <div class="info-box">
                     <p>
                         <strong>💡 提示：</strong>
-                        这是基于向量相似度的语义检索。系统会理解查询的语义含义，
-                        而不仅仅是关键词匹配。尝试使用自然语言提问！
+                        您有两种模式可选：<br>
+                        • <strong>🔍 搜索</strong>：仅执行向量相似度检索，显示相关文档片段<br>
+                        • <strong>💬 问答</strong>：先检索相关文档，再调用百炼大模型生成回答
                     </p>
                 </div>
 
@@ -433,19 +714,26 @@
                             placeholder="输入您的问题或关键词，例如：什么是机器学习？"
                             required
                         >
-                        <button type="submit" class="btn btn-primary" id="searchBtn">
-                            🔍 搜索
-                        </button>
+                        <div class="button-group">
+                            <button type="button" class="btn btn-primary" id="searchBtn">
+                                🔍 搜索
+                            </button>
+                            <button type="button" class="btn btn-success" id="chatBtn">
+                                💬 问答
+                            </button>
+                        </div>
                     </div>
 
                     <div class="form-row">
-                        <div class="form-group">
-                            <label>返回结果数量:</label>
-                            <select class="form-select" id="kSelect">
-                                <option value="3">3 条</option>
-                                <option value="5" selected>5 条</option>
-                                <option value="10">10 条</option>
-                            </select>
+                        <div class="form-row-left">
+                            <div class="form-group">
+                                <label>返回结果数量:</label>
+                                <select class="form-select" id="kSelect">
+                                    <option value="3">3 条</option>
+                                    <option value="5" selected>5 条</option>
+                                    <option value="10">10 条</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -463,34 +751,52 @@
 
             <div class="loading" id="loadingIndicator">
                 <div class="spinner"></div>
-                <p>正在检索相关文档...</p>
+                <p id="loadingText">正在处理...</p>
             </div>
 
-            <div class="results-section" id="resultsSection">
-                <div class="results-header">
-                    <h2>📋 检索结果</h2>
-                    <span class="result-count" id="resultCount">找到 0 条结果</span>
-                </div>
+            <div class="tabs" id="resultTabs" style="display: none;">
+                <button class="tab active" data-tab="search">🔍 检索结果</button>
+                <button class="tab" data-tab="chat">💬 模型回答</button>
+            </div>
 
-                <div class="result-list" id="resultList">
+            <div class="tab-content active" id="searchTabContent">
+                <div class="results-section" id="searchResultsSection">
+                    <div class="results-header">
+                        <h2>📋 检索结果</h2>
+                        <span class="result-count" id="searchResultCount">找到 0 条结果</span>
+                    </div>
+
+                    <div class="result-list" id="searchResultList">
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="chatTabContent">
+                <div class="chat-section" id="chatSection">
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // DOM 元素引用
-        const searchForm = document.getElementById('searchForm');
         const queryInput = document.getElementById('queryInput');
         const kSelect = document.getElementById('kSelect');
         const searchBtn = document.getElementById('searchBtn');
+        const chatBtn = document.getElementById('chatBtn');
         const loadingIndicator = document.getElementById('loadingIndicator');
-        const resultsSection = document.getElementById('resultsSection');
-        const resultList = document.getElementById('resultList');
-        const resultCount = document.getElementById('resultCount');
+        const loadingText = document.getElementById('loadingText');
+        const searchResultsSection = document.getElementById('searchResultsSection');
+        const searchResultList = document.getElementById('searchResultList');
+        const searchResultCount = document.getElementById('searchResultCount');
         const quickTags = document.querySelectorAll('.quick-tag');
+        const resultTabs = document.getElementById('resultTabs');
+        const searchTabContent = document.getElementById('searchTabContent');
+        const chatTabContent = document.getElementById('chatTabContent');
+        const chatSection = document.getElementById('chatSection');
 
-        // 快速标签点击事件
+        let currentSearchData = null;
+        let currentChatData = null;
+
         quickTags.forEach(tag => {
             tag.addEventListener('click', () => {
                 const query = tag.getAttribute('data-query');
@@ -499,22 +805,49 @@
             });
         });
 
-        // 表单提交事件
-        searchForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
+                tab.classList.add('active');
+                const tabName = tab.getAttribute('data-tab');
+                if (tabName === 'search') {
+                    searchTabContent.classList.add('active');
+                } else {
+                    chatTabContent.classList.add('active');
+                }
+            });
+        });
+
+        searchBtn.addEventListener('click', async () => {
+            await performSearch();
+        });
+
+        chatBtn.addEventListener('click', async () => {
+            await performChat();
+        });
+
+        queryInput.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                await performSearch();
+            }
+        });
+
+        async function performSearch() {
             const query = queryInput.value.trim();
             if (!query) return;
 
             const k = parseInt(kSelect.value);
 
-            // 显示加载状态
-            loadingIndicator.classList.add('show');
-            resultsSection.classList.remove('show');
-            searchBtn.disabled = true;
+            showLoading('正在检索相关文档...');
+            searchResultsSection.classList.remove('show');
+            chatSection.classList.remove('show');
+            resultTabs.style.display = 'none';
+            setButtonsDisabled(true);
 
             try {
-                // 发送搜索请求
                 const response = await fetch('/api/search', {
                     method: 'POST',
                     headers: {
@@ -527,35 +860,98 @@
                 });
 
                 const result = await response.json();
+                currentSearchData = result.data;
 
                 if (result.success) {
-                    displayResults(result.data);
+                    displaySearchResults(result.data);
                 } else {
-                    displayError(result.message || '搜索失败');
+                    displaySearchError(result.message || '搜索失败');
                 }
 
             } catch (error) {
                 console.error('搜索错误:', error);
-                displayError(error.message || '网络错误');
+                displaySearchError(error.message || '网络错误');
             } finally {
-                loadingIndicator.classList.remove('show');
-                searchBtn.disabled = false;
+                hideLoading();
+                setButtonsDisabled(false);
             }
-        });
+        }
 
-        // 显示搜索结果
-        function displayResults(data) {
+        async function performChat() {
+            const query = queryInput.value.trim();
+            if (!query) return;
+
+            const k = parseInt(kSelect.value);
+
+            showLoading('正在检索文档并调用大模型...');
+            setButtonsDisabled(true);
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        k: k
+                    })
+                });
+
+                const result = await response.json();
+                currentChatData = result.data;
+
+                if (result.success) {
+                    if (result.data.retrieved_contexts && result.data.retrieved_contexts.length > 0) {
+                        displaySearchResults({
+                            query: query,
+                            result_count: result.data.retrieved_contexts.length,
+                            results: result.data.retrieved_contexts
+                        });
+                    }
+
+                    displayChatAnswer(result.data);
+
+                    resultTabs.style.display = 'flex';
+                    document.querySelector('[data-tab="chat"]').classList.add('active');
+                    document.querySelector('[data-tab="search"]').classList.remove('active');
+                    chatTabContent.classList.add('active');
+                    searchTabContent.classList.remove('active');
+                } else {
+                    displayChatError(result.message || '问答失败');
+                }
+
+            } catch (error) {
+                console.error('问答错误:', error);
+                displayChatError(error.message || '网络错误');
+            } finally {
+                hideLoading();
+                setButtonsDisabled(false);
+            }
+        }
+
+        function showLoading(text) {
+            loadingText.textContent = text;
+            loadingIndicator.classList.add('show');
+        }
+
+        function hideLoading() {
+            loadingIndicator.classList.remove('show');
+        }
+
+        function setButtonsDisabled(disabled) {
+            searchBtn.disabled = disabled;
+            chatBtn.disabled = disabled;
+        }
+
+        function displaySearchResults(data) {
             const results = data.results || [];
 
-            // 更新结果计数
-            resultCount.textContent = `找到 ${results.length} 条结果`;
-
-            // 清空之前的结果
-            resultList.innerHTML = '';
+            searchResultCount.textContent = `找到 ${results.length} 条结果`;
+            searchResultList.innerHTML = '';
 
             if (results.length === 0) {
-                // 没有结果
-                resultList.innerHTML = `
+                searchResultList.innerHTML = `
                     <div class="no-results">
                         <div class="no-results-icon">🔍</div>
                         <h3>没有找到相关文档</h3>
@@ -573,28 +969,24 @@
                     </div>
                 `;
             } else {
-                // 渲染结果
                 results.forEach((result, index) => {
                     const card = createResultCard(result, index + 1);
-                    resultList.appendChild(card);
+                    searchResultList.appendChild(card);
                 });
             }
 
-            resultsSection.classList.add('show');
+            searchResultsSection.classList.add('show');
         }
 
-        // 创建结果卡片
         function createResultCard(result, rank) {
             const card = document.createElement('div');
             card.className = 'result-card';
 
-            // 计算分数等级
             const score = result.score;
             let scoreClass = 'low';
             if (score >= 0.7) scoreClass = 'high';
             else if (score >= 0.4) scoreClass = 'medium';
 
-            // 格式化元数据
             const metadata = result.metadata || {};
             const metaBadges = [];
 
@@ -628,10 +1020,9 @@
             return card;
         }
 
-        // 显示错误
-        function displayError(message) {
-            resultCount.textContent = '搜索出错';
-            resultList.innerHTML = `
+        function displaySearchError(message) {
+            searchResultCount.textContent = '搜索出错';
+            searchResultList.innerHTML = `
                 <div class="no-results">
                     <div class="no-results-icon">❌</div>
                     <h3>搜索出错</h3>
@@ -644,17 +1035,145 @@
                     </p>
                 </div>
             `;
-            resultsSection.classList.add('show');
+            searchResultsSection.classList.add('show');
         }
 
-        // HTML 转义
+        function displayChatAnswer(data) {
+            const answer = data.answer || '';
+            const sourceType = data.source_type || '未知';
+            const retrievedContexts = data.retrieved_contexts || [];
+
+            let sourceBadgeClass = 'unknown';
+            let sourceBadgeText = '来源: 未知';
+
+            if (sourceType === '参考资料') {
+                sourceBadgeClass = 'reference';
+                sourceBadgeText = '来源: 参考资料';
+            } else if (sourceType === '大模型内置知识') {
+                sourceBadgeClass = 'builtin';
+                sourceBadgeText = '来源: 大模型内置知识';
+            }
+
+            let contextsHtml = '';
+            if (retrievedContexts.length > 0) {
+                contextsHtml = retrievedContexts.map((ctx, index) => {
+                    const score = ctx.score ? `${(ctx.score * 100).toFixed(1)}%` : '-';
+                    const metadata = ctx.metadata || {};
+                    const fileName = metadata.file_name || `文档${index + 1}`;
+                    return `
+                        <div class="context-item">
+                            <div class="context-item-header">
+                                <span class="context-item-title">📄 ${escapeHtml(fileName)} - 第 ${index + 1} 段</span>
+                                <span class="context-item-score">相似度: ${score}</span>
+                            </div>
+                            <div class="context-item-content">
+                                ${escapeHtml(ctx.content)}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            chatSection.innerHTML = `
+                <div class="chat-answer-box">
+                    <div class="chat-answer-header">
+                        <div class="chat-avatar">🤖</div>
+                        <span class="chat-title">百炼大模型回答</span>
+                        <span class="chat-source-badge ${sourceBadgeClass}">
+                            ${sourceBadgeText}
+                        </span>
+                    </div>
+                    <div class="chat-answer-content">
+                        ${formatMarkdown(answer)}
+                    </div>
+                    ${retrievedContexts.length > 0 ? `
+                    <div class="retrieved-contexts-toggle">
+                        <button class="toggle-btn" onclick="toggleContexts()">
+                            <span id="toggleIcon">▼</span>
+                            <span id="toggleText">查看检索到的参考资料 (${retrievedContexts.length} 段)</span>
+                        </button>
+                        <div class="retrieved-contexts" id="retrievedContexts">
+                            ${contextsHtml}
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+
+            chatSection.classList.add('show');
+        }
+
+        function displayChatError(message) {
+            chatSection.innerHTML = `
+                <div class="chat-answer-box" style="border-left-color: #dc3545;">
+                    <div class="chat-answer-header">
+                        <div class="chat-avatar" style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);">⚠️</div>
+                        <span class="chat-title">问答出错</span>
+                    </div>
+                    <div class="chat-answer-content">
+                        <p style="color: #c62828;">${escapeHtml(message)}</p>
+                        <p style="font-size: 0.9rem; color: #666; margin-top: 10px;">
+                            请检查：<br>
+                            1. 是否已上传文档<br>
+                            2. DASHSCOPE_API_KEY 是否配置正确<br>
+                            3. 网络连接是否正常
+                        </p>
+                    </div>
+                </div>
+            `;
+            chatSection.classList.add('show');
+        }
+
+        function toggleContexts() {
+            const contextsDiv = document.getElementById('retrievedContexts');
+            const toggleIcon = document.getElementById('toggleIcon');
+            const toggleText = document.getElementById('toggleText');
+
+            if (contextsDiv.classList.contains('show')) {
+                contextsDiv.classList.remove('show');
+                toggleIcon.textContent = '▼';
+                toggleText.textContent = toggleText.textContent.replace('收起', '查看');
+            } else {
+                contextsDiv.classList.add('show');
+                toggleIcon.textContent = '▲';
+                toggleText.textContent = toggleText.textContent.replace('查看', '收起');
+            }
+        }
+
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
 
-        // 自动聚焦输入框
+        function formatMarkdown(text) {
+            let result = text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                .replace(/^### (.*$)/gim, '<h3 style="font-size: 1.1rem; margin: 15px 0 10px; color: #333;">$1</h3>')
+                .replace(/^## (.*$)/gim, '<h2 style="font-size: 1.2rem; margin: 15px 0 10px; color: #333;">$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1 style="font-size: 1.3rem; margin: 15px 0 10px; color: #333;">$1</h1>');
+
+            result = result.replace(/```([\s\S]*?)```/g, (match, code) => {
+                return `<pre><code>${code.trim()}</code></pre>`;
+            });
+
+            result = result.replace(/^- (.*$)/gim, '<li>$1</li>');
+            result = result.replace(/(\n<li>.*<\/li>)+/g, (match) => {
+                return `<ul style="margin: 10px 0; padding-left: 20px;">${match}</ul>`;
+            });
+
+            result = result.replace(/\n\n/g, '</p><p>');
+            result = result.replace(/\n/g, '<br>');
+
+            if (!result.startsWith('<')) {
+                result = '<p>' + result + '</p>';
+            }
+
+            return result;
+        }
+
         queryInput.focus();
     </script>
 </body>
