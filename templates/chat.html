@@ -845,22 +845,8 @@
                 uploadProgress.classList.remove('show');
 
                 if (result.success) {
-                    const summary = result.data.summary || {};
-                    const vectorStats = result.data.vector_stats || {};
-                    const stats = result.data.stats || {};
-
-                    showUploadResult(
-                        true,
-                        summary.text_total_chars,
-                        summary.vector_stored_count,
-                        summary.text_chunk_count,
-                        vectorStats.verification_success
-                    );
-                    updateCurrentDocument(
-                        result.data.original_name,
-                        summary.text_total_chars,
-                        summary.vector_stored_count
-                    );
+                    showUploadResult(true, `文档上传成功！共 ${result.data.total_chunks} 个片段`);
+                    updateCurrentDocument(result.data.original_name);
                     hasDocument = true;
                     sendBtn.disabled = false;
 
@@ -870,12 +856,12 @@
 
                     showQuickQuestions(result.data.original_name);
                 } else {
-                    showUploadResult(false, 0, 0, 0, false, result.message || '上传失败');
+                    showUploadResult(false, result.message || '上传失败');
                 }
 
             } catch (error) {
                 uploadProgress.classList.remove('show');
-                showUploadResult(false, 0, 0, 0, false, '网络错误: ' + error.message);
+                showUploadResult(false, '网络错误: ' + error.message);
             }
 
             fileInput.value = '';
@@ -886,51 +872,16 @@
             progressText.textContent = text;
         }
 
-        function showUploadResult(success, totalChars, vectorCount, chunkCount, verified, errorMessage) {
+        function showUploadResult(success, message) {
             uploadResult.className = 'upload-result show ' + (success ? 'success' : 'error');
-
-            if (success) {
-                const verifiedIcon = verified ? '✅' : '⚠️';
-                uploadResult.innerHTML = `
-                    <div style="margin-bottom: 8px;">
-                        <span style="font-size: 1.1rem; font-weight: bold;">✅ 文档上传成功！</span>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85rem;">
-                        <div style="background: rgba(255,255,255,0.5); padding: 6px 10px; border-radius: 4px;">
-                            <span style="opacity: 0.7;">📄 文本总量：</span>
-                            <strong>${formatNumber(totalChars)} 字符</strong>
-                        </div>
-                        <div style="background: rgba(255,255,255,0.5); padding: 6px 10px; border-radius: 4px;">
-                            <span style="opacity: 0.7;">📊 文本片段：</span>
-                            <strong>${chunkCount} 个</strong>
-                        </div>
-                        <div style="background: rgba(255,255,255,0.5); padding: 6px 10px; border-radius: 4px; grid-column: span 2;">
-                            <span style="opacity: 0.7;">🗄️ 向量数据库：</span>
-                            <strong>${vectorCount} 条记录</strong>
-                            <span style="margin-left: 10px; opacity: 0.8;">${verifiedIcon} ${verified ? '已验证' : '验证中'}</span>
-                        </div>
-                    </div>
-                `;
-            } else {
-                uploadResult.innerHTML = `<span>❌</span> ${errorMessage || '上传失败'}`;
-            }
+            uploadResult.innerHTML = success
+                ? `<span>✅</span> ${message}`
+                : `<span>❌</span> ${message}`;
         }
 
-        function formatNumber(num) {
-            if (num === undefined || num === null) return '0';
-            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-        }
-
-        function updateCurrentDocument(fileName, totalChars, vectorCount) {
+        function updateCurrentDocument(fileName) {
             currentDocName.textContent = fileName;
-            let statsText = '上传时间: ' + new Date().toLocaleString('zh-CN');
-            if (totalChars !== undefined && totalChars !== null) {
-                statsText += ` | 文本: ${formatNumber(totalChars)} 字符`;
-            }
-            if (vectorCount !== undefined && vectorCount !== null) {
-                statsText += ` | 向量: ${vectorCount} 条`;
-            }
-            currentDocTime.textContent = statsText;
+            currentDocTime.textContent = '上传时间: ' + new Date().toLocaleString('zh-CN');
             currentDoc.classList.add('show');
         }
 
@@ -1105,11 +1056,7 @@
 
                 if (result.success && result.data.current_document) {
                     const doc = result.data.current_document;
-                    updateCurrentDocument(
-                        doc.file_name,
-                        doc.total_chars,
-                        doc.stored_in_vector_db
-                    );
+                    updateCurrentDocument(doc.file_name);
                     hasDocument = true;
                     sendBtn.disabled = false;
 

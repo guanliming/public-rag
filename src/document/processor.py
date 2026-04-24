@@ -183,8 +183,23 @@ class DocumentLoader:
 
         try:
             # 创建加载器实例并加载文档
-            loader = loader_class(file_path)
-            documents = loader.load()
+            if doc_format == SupportedFormats.TEXT:
+                # 尝试使用 utf-8 编码
+                try:
+                    loader = loader_class(file_path, encoding='utf-8')
+                    documents = loader.load()
+                except UnicodeDecodeError:
+                    # 如果 utf-8 失败，尝试使用 gbk 编码
+                    try:
+                        loader = loader_class(file_path, encoding='gbk')
+                        documents = loader.load()
+                    except UnicodeDecodeError:
+                        # 如果都失败，使用 latin-1 编码（会替换无法解码的字符）
+                        loader = loader_class(file_path, encoding='latin-1')
+                        documents = loader.load()
+            else:
+                loader = loader_class(file_path)
+                documents = loader.load()
 
             # 增强元数据
             self._enhance_metadata(documents, file_path, doc_format)

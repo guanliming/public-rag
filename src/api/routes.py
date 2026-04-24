@@ -448,21 +448,12 @@ def register_api_routes(bp: Blueprint) -> None:
             document_ids = vector_store.add_documents(documents)
             print(f"调用 add_documents 返回了 {len(document_ids)} 个文档 ID")
 
-            # 验证文档是否真的存储到向量数据库
-            print("正在验证数据是否成功存储...")
-            verification = vector_store.verify_documents_stored(document_ids)
-            print(f"验证结果: {verification['message']}")
-
-            # 获取向量数据库统计信息
-            vector_stats = vector_store.get_collection_stats()
-            print(f"向量数据库统计: {vector_stats}")
-
             # 记录当前上传的文件名（使用原始文件名，便于用户识别）
             global_store["current_document"] = {
                 "file_name": original_filename,
                 "upload_time": datetime.now().isoformat(),
                 "total_chunks": len(documents),
-                "stored_in_vector_db": verification["stored_count"],
+                "stored_in_vector_db": len(document_ids),
                 "total_chars": stats.get("total_chars", 0),
             }
 
@@ -475,42 +466,46 @@ def register_api_routes(bp: Blueprint) -> None:
                 "document_ids": document_ids,
                 "stats": stats,
                 "vector_stats": {
-                    "stored_count": verification["stored_count"],
-                    "verification_success": verification["success"],
-                    "verification_message": verification["message"],
-                    "total_documents_in_db": vector_stats.get("total_documents", 0),
-                    "collection_documents": vector_stats.get("collection_documents", 0),
-                    "collection_name": vector_stats.get("collection_name"),
+                    "stored_count": len(document_ids),
                 },
                 "summary": {
                     "text_total_chars": stats.get("total_chars", 0),
                     "text_chunk_count": len(documents),
-                    "vector_stored_count": verification["stored_count"],
-                    "vector_verified": verification["success"],
+                    "vector_stored_count": len(document_ids),
                 }
             }
 
-            if verification["success"]:
-                return jsonify({
-                    "success": True,
-                    "message": f"文档上传并处理成功！文本总量: {stats.get('total_chars', 0)} 字符，向量数据库: {verification['stored_count']} 条记录",
-                    "data": response_data,
-                })
-            else:
-                return jsonify({
-                    "success": False,
-                    "message": f"文档处理完成但验证失败: {verification['message']}",
-                    "data": response_data,
-                }), 500
+            return jsonify({
+                "success": True,
+                "message": f"文档上传并处理成功！文本总量: {stats.get('total_chars', 0)} 字符，向量数据库: {len(document_ids)} 条记录",
+                "data": response_data,
+            })
 
         except Exception as e:
             # 清理保存的文件（如果有）
             if os.path.exists(file_path):
                 os.remove(file_path)
+                print(f"已清理临时文件: {file_path}")
+
+            # 打印详细的错误信息
+            import traceback
+            error_traceback = traceback.format_exc()
+            print(f"\n=== 详细错误信息 ===")
+            print(f"错误类型: {type(e).__name__}")
+            print(f"错误消息: {str(e)}")
+            print(f"错误堆栈:\n{error_traceback}")
+            print("====================\n")
 
             return jsonify({
                 "success": False,
                 "message": f"处理文档时出错: {str(e)}",
+                "error_details": {
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": error_traceback,
+                    "file_path": file_path,
+                    "original_filename": original_filename,
+                },
             }), 500
 
     @bp.route("/search", methods=["POST"])

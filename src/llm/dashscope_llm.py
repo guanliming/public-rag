@@ -4,14 +4,14 @@
 阿里百炼 LLM 模块
 ==============
 
-使用 OpenAI 兼容模式调用阿里百炼大模型。
+使用阿里云 DashScope API 调用阿里百炼大模型。
 
 支持的模型：
 - qwen3.6-35b-a3b: 千问3.6 35B 模型
 - 其他 qwen 系列模型
 
 API 文档参考：
-- https://help.aliyun.com/zh/model-studio/developer-reference/openai-compatible-api
+- https://help.aliyun.com/zh/model-studio/developer-reference/use-qwen-by-calling-api
 """
 
 import os
@@ -20,9 +20,12 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
 
-from openai import OpenAI
+import dashscope
 from dotenv import load_dotenv
 
+# 加载环境变量
+# 优先加载 .env.local（包含敏感信息，不会提交到 git）
+# 然后加载 .env（作为默认值）
 _env_local_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env.local')
 _env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
 
@@ -55,7 +58,6 @@ class LLMConfig:
     temperature: float = 0.7
     max_tokens: int = 4096
     top_p: float = 0.9
-    base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
     @classmethod
     def from_env(cls) -> "LLMConfig":
@@ -75,7 +77,6 @@ class LLMConfig:
             temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
             max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4096")),
             top_p=float(os.getenv("LLM_TOP_P", "0.9")),
-            base_url=os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
         )
 
 
@@ -124,7 +125,7 @@ class DashScopeLLM:
     """
     阿里百炼 LLM 客户端
 
-    使用 OpenAI 兼容模式调用大模型进行对话和生成。
+    使用 DashScope API 调用大模型进行对话和生成。
     """
 
     def __init__(self, config: Optional[LLMConfig] = None):
@@ -138,10 +139,13 @@ class DashScopeLLM:
             config = LLMConfig.from_env()
 
         self.config = config
-        self._client = OpenAI(
-            api_key=config.api_key,
-            base_url=config.base_url,
-        )
+        self._setup_api()
+
+    def _setup_api(self) -> None:
+        """
+        设置 DashScope API 配置
+        """
+        dashscope.api_key = self.config.api_key
 
     def generate(
         self,
@@ -167,19 +171,21 @@ class DashScopeLLM:
 
         messages.append({"role": "user", "content": prompt})
 
-        try:
-            response = self._client.chat.completions.create(
-                model=self.config.model,
-                messages=messages,
-                temperature=kwargs.get("temperature", self.config.temperature),
-                max_tokens=kwargs.get("max_tokens", self.config.max_tokens),
-                top_p=kwargs.get("top_p", self.config.top_p),
+        response = dashscope.Generation.call(
+            model=self.config.model,
+            messages=messages,
+            temperature=kwargs.get("temperature", self.config.temperature),
+            max_tokens=kwargs.get("max_tokens", self.config.max_tokens),
+            top_p=kwargs.get("top_p", self.config.top_p),
+            result_format="message",
+        )
+
+        if response.status_code != 200:
+            raise Exception(
+                f"API 调用失败: {response.code} - {response.message}"
             )
 
-            return response.choices[0].message.content
-
-        except Exception as e:
-            raise Exception(f"API 调用失败: {str(e)}")
+        return response.output.choices[0].message.content
 
     def chat(
         self,
@@ -196,19 +202,21 @@ class DashScopeLLM:
         Returns:
             str: 模型生成的回复文本
         """
-        try:
-            response = self._client.chat.completions.create(
-                model=self.config.model,
-                messages=messages,
-                temperature=kwargs.get("temperature", self.config.temperature),
-                max_tokens=kwargs.get("max_tokens", self.config.max_tokens),
-                top_p=kwargs.get("top_p", self.config.top_p),
+        response = dashscope.Generation.call(
+            model=self.config.model,
+            messages=messages,
+            temperature=kwargs.get("temperature", self.config.temperature),
+            max_tokens=kwargs.get("max_tokens", self.config.max_tokens),
+            top_p=kwargs.get("top_p", self.config.top_p),
+            result_format="message",
+        )
+
+        if response.status_code != 200:
+            raise Exception(
+                f"API 调用失败: {response.code} - {response.message}"
             )
 
-            return response.choices[0].message.content
-
-        except Exception as e:
-            raise Exception(f"API 调用失败: {str(e)}")
+        return response.output.choices[0].message.content
 
     def rag_query(
         self,
