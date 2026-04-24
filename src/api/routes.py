@@ -33,19 +33,10 @@ from src.database.vector_db import DatabaseConfig, DatabaseManager, VectorStore
 from src.document.processor import DocumentProcessor, SupportedFormats
 from src.embedding.embedder import get_embedding_model, EmbeddingConfig
 from src.llm import get_llm, LLMConfig
-from dotenv import load_dotenv
+from src.config import load_config
 
-# 加载环境变量
-# 优先加载 .env.local（包含敏感信息，不会提交到 git）
-# 然后加载 .env（作为默认值）
-_env_local_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env.local')
-_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
-
-if os.path.exists(_env_local_path):
-    load_dotenv(_env_local_path, override=True)
-
-if os.path.exists(_env_path):
-    load_dotenv(_env_path, override=False)
+# 加载配置（支持 settings.yaml 和环境变量）
+load_config()
 
 # 全局对象，用于存储 VectorStore 等共享资源
 # 注意：在生产环境中应该使用依赖注入或单例模式
