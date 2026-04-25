@@ -903,6 +903,71 @@ class VectorStore:
             print(f"按文件名获取文档时出错: {e}")
             return []
 
+    def get_documents_summary(self) -> List[Dict[str, Any]]:
+        """
+        获取所有文档的汇总信息（高效聚合查询）
+
+        使用单次 GROUP BY 查询获取所有文件的统计信息，
+        替代原来的 N+1 查询模式，性能提升显著。
+
+        Returns:
+            List[Dict]: 文档汇总列表，每个元素包含：
+                - file_name: 文件名
+                - chunk_count: 该文件的片段数量
+                - file_size: 文件大小（从元数据获取）
+                - format: 文件格式（从元数据获取）
+                - loaded_at: 加载时间（从元数据获取）
+
+        示例:
+            >>> docs = vector_store.get_documents_summary()
+            >>> for doc in docs:
+            ...     print(f"{doc['file_name']}: {doc['chunk_count']} 个片段")
+        """
+        try:
+            import psycopg2
+            
+            with psycopg2.connect(self.config.connection_string) as conn:
+                cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                
+                cursor.execute("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = 'langchain_pg_embedding'
+                """)
+                if not cursor.fetchone():
+                    return []
+                
+                cursor.execute("""
+                    SELECT 
+                        cmetadata->>'file_name' as file_name,
+                        COUNT(*) as chunk_count,
+                        MAX(cmetadata->>'file_size') as file_size,
+                        MAX(cmetadata->>'format') as format,
+                        MAX(cmetadata->>'loaded_at') as loaded_at
+                    FROM langchain_pg_embedding
+                    WHERE cmetadata->>'file_name' IS NOT NULL
+                    GROUP BY cmetadata->>'file_name'
+                    ORDER BY MAX(cmetadata->>'loaded_at') DESC, file_name
+                """)
+                
+                results = []
+                for row in cursor.fetchall():
+                    results.append({
+                        'file_name': row['file_name'],
+                        'chunk_count': int(row['chunk_count']) if row['chunk_count'] else 0,
+                        'file_size': int(row['file_size']) if row['file_size'] and row['file_size'].isdigit() else 0,
+                        'format': row['format'] or 'unknown',
+                        'loaded_at': row['loaded_at'] or '',
+                    })
+                
+                print(f"数据库中共有 {len(results)} 个不同的文件（聚合查询）")
+                return results
+                
+        except Exception as e:
+            print(f"获取文档汇总时出错: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
     def search(
         self,
         query: str,

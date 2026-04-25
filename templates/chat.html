@@ -330,7 +330,47 @@
             font-size: 0.8rem;
             color: var(--text-primary);
             word-break: break-all;
-            padding: 4px 0;
+            padding: 6px 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.5);
+            border-radius: 6px;
+        }
+
+        .current-doc-item:hover {
+            background: rgba(255,255,255,0.8);
+        }
+
+        .current-doc-info {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .delete-doc-btn {
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 0.9rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            margin-left: 8px;
+            flex-shrink: 0;
+        }
+
+        .delete-doc-btn:hover {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        .delete-doc-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .current-docs-time {
@@ -1180,9 +1220,79 @@
 
             currentDocs.classList.add('show');
             currentDocsList.innerHTML = files.map(f => `
-                <div class="current-doc-item">• ${f.file_name} (${f.chunk_count} 片段)</div>
+                <div class="current-doc-item" data-filename="${encodeURIComponent(f.file_name)}">
+                    <span class="current-doc-info" title="${f.file_name}">
+                        • ${f.file_name} (${f.chunk_count} 片段)
+                    </span>
+                    <button 
+                        class="delete-doc-btn" 
+                        onclick="deleteDocument('${encodeURIComponent(f.file_name)}', this)"
+                        title="删除此文档"
+                    >🗑️</button>
+                </div>
             `).join('');
-            currentDocsTime.textContent = '上传时间: ' + new Date().toLocaleString('zh-CN');
+            currentDocsTime.textContent = '更新时间: ' + new Date().toLocaleString('zh-CN');
+        }
+
+        async function deleteDocument(encodedFilename, button) {
+            const filename = decodeURIComponent(encodedFilename);
+            
+            if (!confirm(`确定要删除文档 "${filename}" 吗？\n此操作将从知识库中移除该文件的所有向量记录。`)) {
+                return;
+            }
+
+            if (button) {
+                button.disabled = true;
+                button.textContent = '⏳';
+            }
+
+            try {
+                const response = await fetch(`/api/documents/${encodedFilename}`, {
+                    method: 'DELETE',
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showUploadResult('success', `已成功删除文档: ${filename}（删除了 ${result.data.deleted_count} 条记录）`);
+                    
+                    const remainingDocs = result.data.remaining_documents;
+                    hasDocumentsInKb = result.data.has_documents;
+                    
+                    if (hasDocumentsInKb) {
+                        updateCurrentDocsDisplay(remainingDocs);
+                        updateKbStatus({
+                            total_files_in_kb: remainingDocs.length,
+                            total_chunks_in_kb: remainingDocs.reduce((sum, d) => sum + (d.chunk_count || 0), 0),
+                            files_in_kb: remainingDocs
+                        });
+                        sendBtn.disabled = false;
+                    } else {
+                        currentDocs.classList.remove('show');
+                        kbStatus.style.display = 'none';
+                        sendBtn.disabled = true;
+                        hasDocumentsInKb = false;
+                        
+                        if (welcomeMessage) {
+                            welcomeMessage.style.display = 'block';
+                        }
+                    }
+                } else {
+                    showUploadResult('error', `删除失败: ${result.message}`);
+                    if (button) {
+                        button.disabled = false;
+                        button.textContent = '🗑️';
+                    }
+                }
+
+            } catch (error) {
+                console.error('删除文档时出错:', error);
+                showUploadResult('error', '删除文档时出错: ' + error.message);
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = '🗑️';
+                }
+            }
         }
 
         chatInput.addEventListener('input', autoResize);

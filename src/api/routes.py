@@ -228,7 +228,7 @@ def get_documents_from_store() -> List[Dict[str, Any]]:
     """
     获取向量库中所有文档的信息列表
 
-    从向量存储或 global_store 获取已上传的文档列表。
+    从向量存储获取已上传的文档列表，使用高效的聚合查询。
 
     Returns:
         List[Dict]: 文档信息列表
@@ -237,23 +237,7 @@ def get_documents_from_store() -> List[Dict[str, Any]]:
     if vector_store is None:
         return []
     
-    filenames = vector_store.get_all_filenames()
-    
-    documents = []
-    for filename in filenames:
-        docs = vector_store.get_documents_by_filename(filename)
-        if docs:
-            first_doc = docs[0]
-            metadata = first_doc.get('metadata', {})
-            documents.append({
-                'file_name': filename,
-                'chunk_count': len(docs),
-                'file_size': metadata.get('file_size', 0),
-                'format': metadata.get('format', 'unknown'),
-                'loaded_at': metadata.get('loaded_at', ''),
-            })
-    
-    return documents
+    return vector_store.get_documents_summary()
 
 
 def register_api_routes(bp: Blueprint) -> None:
@@ -813,6 +797,74 @@ def register_api_routes(bp: Blueprint) -> None:
                 "all_documents": all_documents,
             }
         })
+
+    @bp.route("/documents/<path:filename>", methods=["DELETE"])
+    def delete_document(filename):
+        """
+        删除指定文件名的所有文档向量
+
+        从向量数据库中删除指定文件名的所有相关记录。
+        用于知识库管理，允许用户删除不需要的文档。
+
+        Args:
+            filename: 要删除的文件名（支持路径风格的 URL）
+
+        Returns:
+            JSON: {
+                "success": true,
+                "message": "已成功删除文档",
+                "data": {
+                    "file_name": "example.pdf",
+                    "deleted_count": 10
+                }
+            }
+        """
+        from urllib.parse import unquote
+        
+        decoded_filename = unquote(filename)
+        
+        vector_store = get_vector_store()
+        if vector_store is None:
+            return jsonify({
+                "success": False,
+                "message": "向量存储未初始化",
+            }), 500
+        
+        try:
+            deleted_count = vector_store.delete_documents_by_filename(decoded_filename)
+            
+            if deleted_count > 0:
+                all_documents = get_documents_from_store()
+                hasDocumentsInKb = len(all_documents) > 0
+                
+                return jsonify({
+                    "success": True,
+                    "message": f"已成功删除文档 {decoded_filename}",
+                    "data": {
+                        "file_name": decoded_filename,
+                        "deleted_count": deleted_count,
+                        "remaining_documents": all_documents,
+                        "has_documents": hasDocumentsInKb,
+                    }
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "message": f"未找到文件名 {decoded_filename} 的文档",
+                    "data": {
+                        "file_name": decoded_filename,
+                        "deleted_count": 0,
+                    }
+                }), 404
+                
+        except Exception as e:
+            print(f"删除文档时出错: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                "success": False,
+                "message": f"删除文档时出错: {str(e)}",
+            }), 500
 
 
 def register_page_routes(bp: Blueprint) -> None:
