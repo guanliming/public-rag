@@ -22,7 +22,7 @@ API 端点：
 import os
 import uuid
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from flask import Flask, Blueprint, request, jsonify, render_template, current_app
 from flask_cors import CORS
