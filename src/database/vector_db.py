@@ -745,6 +745,164 @@ class VectorStore:
         if ids:
             vector_store.delete(ids=ids)
 
+    def delete_documents_by_filename(self, filename: str) -> int:
+        """
+        根据文件名删除所有相关的文档向量
+
+        用于实现同名文件覆盖功能：上传同名文件前，
+        先删除该文件之前存储的所有向量数据。
+
+        Args:
+            filename: 文件名（如 "document.pdf" 或 "test.txt"）
+
+        Returns:
+            int: 删除的文档数量
+
+        示例:
+            >>> count = vector_store.delete_documents_by_filename("test.pdf")
+            >>> print(f"已删除 {count} 条记录")
+        """
+        try:
+            import psycopg2
+            import json
+            
+            with psycopg2.connect(self.config.connection_string) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = 'langchain_pg_embedding'
+                """)
+                if not cursor.fetchone():
+                    print(f"表 langchain_pg_embedding 不存在，无需删除")
+                    return 0
+                
+                cursor.execute("""
+                    SELECT column_name FROM information_schema.columns 
+                    WHERE table_name = 'langchain_pg_embedding' AND table_schema = 'public'
+                """)
+                columns = [row[0] for row in cursor.fetchall()]
+                
+                if 'cmetadata' not in columns:
+                    print(f"表 langchain_pg_embedding 中没有 cmetadata 列")
+                    return 0
+                
+                cursor.execute("""
+                    SELECT COUNT(*) FROM langchain_pg_embedding 
+                    WHERE cmetadata->>'file_name' = %s
+                """, (filename,))
+                count_result = cursor.fetchone()
+                count = count_result[0] if count_result else 0
+                
+                if count == 0:
+                    print(f"数据库中没有找到文件名 {filename} 的记录")
+                    return 0
+                
+                cursor.execute("""
+                    DELETE FROM langchain_pg_embedding 
+                    WHERE cmetadata->>'file_name' = %s
+                """, (filename,))
+                conn.commit()
+                
+                print(f"✅ 已删除文件名 {filename} 的 {count} 条向量记录")
+                return count
+                
+        except Exception as e:
+            print(f"按文件名删除文档时出错: {e}")
+            import traceback
+            traceback.print_exc()
+            return 0
+
+    def get_all_filenames(self) -> List[str]:
+        """
+        获取向量数据库中所有已存储的文件名列表
+
+        用于知识库管理，查看已上传了哪些文件。
+
+        Returns:
+            List[str]: 去重后的文件名列表
+
+        示例:
+            >>> filenames = vector_store.get_all_filenames()
+            >>> print(filenames)
+            ['document1.pdf', 'test.txt', ...]
+        """
+        try:
+            import psycopg2
+            
+            with psycopg2.connect(self.config.connection_string) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = 'langchain_pg_embedding'
+                """)
+                if not cursor.fetchone():
+                    return []
+                
+                cursor.execute("""
+                    SELECT DISTINCT cmetadata->>'file_name' as filename
+                    FROM langchain_pg_embedding
+                    WHERE cmetadata->>'file_name' IS NOT NULL
+                    ORDER BY filename
+                """)
+                
+                filenames = [row[0] for row in cursor.fetchall() if row[0]]
+                print(f"数据库中共有 {len(filenames)} 个不同的文件")
+                return filenames
+                
+        except Exception as e:
+            print(f"获取文件名列表时出错: {e}")
+            return []
+
+    def get_documents_by_filename(self, filename: str) -> List[Dict[str, Any]]:
+        """
+        根据文件名获取该文件的所有文档信息
+
+        用于验证和调试，查看某个文件在数据库中的存储情况。
+
+        Args:
+            filename: 文件名
+
+        Returns:
+            List[Dict]: 文档信息列表，包含 id、内容预览、元数据等
+        """
+        try:
+            import psycopg2
+            import json
+            
+            with psycopg2.connect(self.config.connection_string) as conn:
+                cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                
+                cursor.execute("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = 'langchain_pg_embedding'
+                """)
+                if not cursor.fetchone():
+                    return []
+                
+                cursor.execute("""
+                    SELECT uuid, document, cmetadata, custom_id
+                    FROM langchain_pg_embedding
+                    WHERE cmetadata->>'file_name' = %s
+                    ORDER BY (cmetadata->>'chunk_index')::int ASC
+                """, (filename,))
+                
+                results = []
+                for row in cursor.fetchall():
+                    results.append({
+                        'id': str(row['uuid']) if row['uuid'] else row.get('custom_id'),
+                        'content_preview': row['document'][:200] if row['document'] else '',
+                        'metadata': dict(row['cmetadata']) if row['cmetadata'] else {},
+                    })
+                
+                print(f"找到 {len(results)} 条 {filename} 的记录")
+                return results
+                
+        except Exception as e:
+            print(f"按文件名获取文档时出错: {e}")
+            return []
+
     def search(
         self,
         query: str,

@@ -174,7 +174,125 @@
             color: var(--text-secondary);
         }
 
-        .current-doc {
+        .selected-files-container {
+            margin-top: 15px;
+            display: none;
+        }
+
+        .selected-files-container.show {
+            display: block;
+        }
+
+        .selected-files-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .selected-files-header h4 {
+            font-size: 0.85rem;
+            color: var(--text-primary);
+        }
+
+        .clear-files-btn {
+            background: none;
+            border: none;
+            color: var(--danger-color);
+            cursor: pointer;
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .clear-files-btn:hover {
+            background: rgba(220, 53, 69, 0.1);
+        }
+
+        .selected-files-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .selected-file-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .selected-file-icon {
+            font-size: 1.2rem;
+        }
+
+        .selected-file-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .selected-file-name {
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .selected-file-size {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .selected-file-remove {
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+            padding: 0 4px;
+        }
+
+        .selected-file-remove:hover {
+            color: var(--danger-color);
+        }
+
+        .kb-status {
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 8px;
+            font-size: 0.8rem;
+        }
+
+        .kb-status-header {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: var(--primary-color);
+        }
+
+        .kb-files-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .kb-file-tag {
+            background: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            color: var(--primary-color);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .current-docs {
             background: #e8f5e9;
             border-radius: 10px;
             padding: 15px;
@@ -182,37 +300,43 @@
             display: none;
         }
 
-        .current-doc.show {
+        .current-docs.show {
             display: block;
         }
 
-        .current-doc-header {
+        .current-docs-header {
             display: flex;
             align-items: center;
             gap: 10px;
             margin-bottom: 8px;
         }
 
-        .current-doc-header .icon {
+        .current-docs-header .icon {
             font-size: 1.2rem;
         }
 
-        .current-doc-header h4 {
+        .current-docs-header h4 {
             color: #2e7d32;
             font-size: 0.9rem;
         }
 
-        .current-doc-name {
-            color: var(--text-primary);
-            font-size: 0.85rem;
-            font-weight: 500;
-            word-break: break-all;
+        .current-docs-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
         }
 
-        .current-doc-time {
+        .current-doc-item {
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            word-break: break-all;
+            padding: 4px 0;
+        }
+
+        .current-docs-time {
             color: var(--text-secondary);
             font-size: 0.75rem;
-            margin-top: 5px;
+            margin-top: 8px;
         }
 
         .upload-progress {
@@ -268,6 +392,48 @@
             background: #ffebee;
             color: #c62828;
             border: 1px solid #ffcdd2;
+        }
+
+        .upload-result.partial {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .upload-btn-sidebar {
+            margin-top: 15px;
+            text-align: center;
+            display: none;
+        }
+
+        .upload-btn-sidebar.show {
+            display: block;
+        }
+
+        .btn-sidebar {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 24px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+        }
+
+        .btn-sidebar:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-sidebar:disabled {
+            background: #ccc;
+            cursor: not-allowed;
         }
 
         .tips-section {
@@ -656,7 +822,7 @@
         <header class="app-header">
             <h1>
                 🤖 RAG 智能对话
-                <span style="font-size: 0.8rem; font-weight: normal; opacity: 0.8;">基于阿里百炼大模型</span>
+                <span style="font-size: 0.8rem; font-weight: normal; opacity: 0.8;">知识库模式</span>
             </h1>
             <nav class="nav-links">
                 <a href="/" class="nav-link">🏠 首页</a>
@@ -676,8 +842,24 @@
                             <h4>拖拽文件到此处</h4>
                             <p>或点击选择文件</p>
                         </div>
-                        <input type="file" class="file-input" id="fileInput" accept=".pdf,.txt">
+                        <p style="font-size: 0.75rem; color: #999; margin-top: 8px;">💡 支持多文件上传</p>
+                        <input type="file" class="file-input" id="fileInput" accept=".pdf,.txt" multiple>
                     </div>
+
+                    <div class="selected-files-container" id="selectedFilesContainer">
+                        <div class="selected-files-header">
+                            <h4>已选择 <span id="selectedFilesCount">0</span> 个文件</h4>
+                            <button class="clear-files-btn" id="clearFilesBtn">清空</button>
+                        </div>
+                        <div class="selected-files-list" id="selectedFilesList"></div>
+                    </div>
+
+                    <div class="upload-btn-sidebar" id="uploadBtnSidebar">
+                        <button class="btn-sidebar" id="doUploadBtn">
+                            🚀 开始上传
+                        </button>
+                    </div>
+
                     <div class="format-hint">
                         支持的格式：
                         <div class="format-badges">
@@ -686,13 +868,18 @@
                         </div>
                     </div>
 
-                    <div class="current-doc" id="currentDoc">
-                        <div class="current-doc-header">
+                    <div class="kb-status" id="kbStatus" style="display: none;">
+                        <div class="kb-status-header">📚 知识库状态</div>
+                        <div id="kbStatusContent"></div>
+                    </div>
+
+                    <div class="current-docs" id="currentDocs">
+                        <div class="current-docs-header">
                             <span class="icon">📄</span>
-                            <h4>当前使用的文档</h4>
+                            <h4>知识库中的文档</h4>
                         </div>
-                        <div class="current-doc-name" id="currentDocName">-</div>
-                        <div class="current-doc-time" id="currentDocTime">-</div>
+                        <div class="current-docs-list" id="currentDocsList"></div>
+                        <div class="current-docs-time" id="currentDocsTime">-</div>
                     </div>
 
                     <div class="upload-progress" id="uploadProgress">
@@ -708,10 +895,10 @@
                 <div class="tips-section">
                     <h4>使用提示</h4>
                     <ul class="tips-list">
-                        <li>每次上传新文档会替换之前的文档</li>
-                        <li>系统会根据您的问题检索相关内容</li>
-                        <li>回答会标注来源：参考资料或内置知识</li>
-                        <li>支持 PDF 和 TXT 格式的文档</li>
+                        <li>支持一次性上传多个文件到知识库</li>
+                        <li>同名文件会自动覆盖更新</li>
+                        <li>所有上传的文档都会保留在知识库中</li>
+                        <li>回答会基于整个知识库进行检索</li>
                     </ul>
                 </div>
             </aside>
@@ -722,8 +909,8 @@
                         <div class="welcome-icon">📚</div>
                         <h2>欢迎使用 RAG 智能对话系统</h2>
                         <p>
-                            请先在左侧上传您的文档（PDF 或 TXT 格式），<br>
-                            然后就可以基于文档内容进行问答了！
+                            请在左侧上传您的文档（PDF 或 TXT 格式），<br>
+                            然后就可以基于知识库内容进行问答了！
                         </p>
                     </div>
                 </div>
@@ -766,13 +953,21 @@
     <script>
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
-        const currentDoc = document.getElementById('currentDoc');
-        const currentDocName = document.getElementById('currentDocName');
-        const currentDocTime = document.getElementById('currentDocTime');
+        const selectedFilesContainer = document.getElementById('selectedFilesContainer');
+        const selectedFilesCount = document.getElementById('selectedFilesCount');
+        const selectedFilesList = document.getElementById('selectedFilesList');
+        const clearFilesBtn = document.getElementById('clearFilesBtn');
+        const currentDocs = document.getElementById('currentDocs');
+        const currentDocsList = document.getElementById('currentDocsList');
+        const currentDocsTime = document.getElementById('currentDocsTime');
         const uploadProgress = document.getElementById('uploadProgress');
         const progressFill = document.getElementById('progressFill');
         const progressText = document.getElementById('progressText');
         const uploadResult = document.getElementById('uploadResult');
+        const kbStatus = document.getElementById('kbStatus');
+        const kbStatusContent = document.getElementById('kbStatusContent');
+        const uploadBtnSidebar = document.getElementById('uploadBtnSidebar');
+        const doUploadBtn = document.getElementById('doUploadBtn');
 
         const chatMessages = document.getElementById('chatMessages');
         const welcomeMessage = document.getElementById('welcomeMessage');
@@ -782,7 +977,13 @@
         const quickQuestions = document.getElementById('quickQuestions');
         const quickTags = document.getElementById('quickTags');
 
-        let hasDocument = false;
+        let selectedFiles = [];
+        let hasDocumentsInKb = false;
+
+        const iconMap = {
+            'pdf': '📕',
+            'txt': '📃'
+        };
 
         uploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -798,29 +999,95 @@
             uploadArea.classList.remove('drag-over');
             const files = e.dataTransfer.files;
             if (files.length > 0) {
-                handleFileUpload(files[0]);
+                addFilesToList(Array.from(files));
             }
         });
 
         fileInput.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
-                handleFileUpload(e.target.files[0]);
+                addFilesToList(Array.from(e.target.files));
             }
         });
 
-        async function handleFileUpload(file) {
-            const ext = file.name.split('.').pop().toLowerCase();
-            if (!['pdf', 'txt'].includes(ext)) {
-                showUploadResult(false, '不支持的文件格式，请上传 PDF 或 TXT 文件');
+        clearFilesBtn.addEventListener('click', () => {
+            selectedFiles = [];
+            updateSelectedFilesDisplay();
+            fileInput.value = '';
+        });
+
+        function addFilesToList(files) {
+            const validExtensions = ['pdf', 'txt'];
+            
+            for (const file of files) {
+                const ext = file.name.split('.').pop().toLowerCase();
+                if (!validExtensions.includes(ext)) {
+                    showUploadResult('error', `不支持的文件格式: ${file.name}`);
+                    continue;
+                }
+                
+                const exists = selectedFiles.some(f => f.name === file.name);
+                if (!exists) {
+                    selectedFiles.push(file);
+                }
+            }
+            
+            updateSelectedFilesDisplay();
+        }
+
+        function removeFileFromList(index) {
+            selectedFiles.splice(index, 1);
+            updateSelectedFilesDisplay();
+        }
+
+        function updateSelectedFilesDisplay() {
+            selectedFilesCount.textContent = selectedFiles.length;
+            
+            if (selectedFiles.length === 0) {
+                selectedFilesContainer.classList.remove('show');
+                uploadBtnSidebar.classList.remove('show');
                 return;
             }
+
+            selectedFilesContainer.classList.add('show');
+            uploadBtnSidebar.classList.add('show');
+
+            selectedFilesList.innerHTML = selectedFiles.map((file, index) => {
+                const ext = file.name.split('.').pop().toLowerCase();
+                const icon = iconMap[ext] || '📄';
+                const size = formatFileSize(file.size);
+
+                return `
+                    <div class="selected-file-item">
+                        <span class="selected-file-icon">${icon}</span>
+                        <div class="selected-file-info">
+                            <div class="selected-file-name">${file.name}</div>
+                            <div class="selected-file-size">${size}</div>
+                        </div>
+                        <button class="selected-file-remove" onclick="removeFileFromList(${index})" title="移除">×</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        async function handleFileUpload() {
+            if (selectedFiles.length === 0) return;
 
             uploadProgress.classList.add('show');
             uploadResult.classList.remove('show');
             updateProgress(10, '准备上传...');
 
             const formData = new FormData();
-            formData.append('file', file);
+            selectedFiles.forEach(file => {
+                formData.append('file', file);
+            });
 
             try {
                 updateProgress(30, '上传文件中...');
@@ -831,54 +1098,51 @@
                     body: formData
                 });
 
-                updateProgress(60, '解析文档中...');
-                await delay(400);
-
-                updateProgress(80, '向量化存储中...');
-                await delay(300);
-
-                const result = await response.json();
+                updateProgress(80, '处理中...');
+                await delay(200);
 
                 updateProgress(100, '处理完成!');
                 await delay(200);
 
+                const result = await response.json();
+
                 uploadProgress.classList.remove('show');
 
-                if (result.success) {
-                    const summary = result.data.summary || {};
-                    const vectorStats = result.data.vector_stats || {};
-                    const stats = result.data.stats || {};
+                if (result.data && result.data.knowledge_base_summary) {
+                    const kbSummary = result.data.knowledge_base_summary;
+                    hasDocumentsInKb = kbSummary.total_files_in_kb > 0;
+                    
+                    if (hasDocumentsInKb) {
+                        updateKbStatus(kbSummary);
+                        updateCurrentDocsDisplay(kbSummary.files_in_kb);
+                        hasDocumentsInKb = true;
+                        sendBtn.disabled = false;
 
-                    showUploadResult(
-                        true,
-                        summary.text_total_chars,
-                        summary.vector_stored_count,
-                        summary.text_chunk_count,
-                        vectorStats.verification_success
-                    );
-                    updateCurrentDocument(
-                        result.data.original_name,
-                        summary.text_total_chars,
-                        summary.vector_stored_count
-                    );
-                    hasDocument = true;
-                    sendBtn.disabled = false;
-
-                    if (welcomeMessage) {
-                        welcomeMessage.style.display = 'none';
+                        if (welcomeMessage) {
+                            welcomeMessage.style.display = 'none';
+                        }
                     }
-
-                    showQuickQuestions(result.data.original_name);
-                } else {
-                    showUploadResult(false, 0, 0, 0, false, result.message || '上传失败');
                 }
+
+                const successCount = result.data?.success_files || 0;
+                const failedCount = result.data?.failed_files || 0;
+
+                if (successCount > 0 && failedCount === 0) {
+                    showUploadResult('success', `成功上传 ${successCount} 个文件到知识库`);
+                } else if (successCount > 0 && failedCount > 0) {
+                    showUploadResult('partial', `成功 ${successCount} 个，失败 ${failedCount} 个`);
+                } else {
+                    showUploadResult('error', '上传失败，请检查文件格式');
+                }
+
+                selectedFiles = [];
+                updateSelectedFilesDisplay();
+                fileInput.value = '';
 
             } catch (error) {
                 uploadProgress.classList.remove('show');
-                showUploadResult(false, 0, 0, 0, false, '网络错误: ' + error.message);
+                showUploadResult('error', '网络错误: ' + error.message);
             }
-
-            fileInput.value = '';
         }
 
         function updateProgress(percent, text) {
@@ -886,79 +1150,41 @@
             progressText.textContent = text;
         }
 
-        function showUploadResult(success, totalChars, vectorCount, chunkCount, verified, errorMessage) {
-            uploadResult.className = 'upload-result show ' + (success ? 'success' : 'error');
-
-            if (success) {
-                const verifiedIcon = verified ? '✅' : '⚠️';
-                uploadResult.innerHTML = `
-                    <div style="margin-bottom: 8px;">
-                        <span style="font-size: 1.1rem; font-weight: bold;">✅ 文档上传成功！</span>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85rem;">
-                        <div style="background: rgba(255,255,255,0.5); padding: 6px 10px; border-radius: 4px;">
-                            <span style="opacity: 0.7;">📄 文本总量：</span>
-                            <strong>${formatNumber(totalChars)} 字符</strong>
-                        </div>
-                        <div style="background: rgba(255,255,255,0.5); padding: 6px 10px; border-radius: 4px;">
-                            <span style="opacity: 0.7;">📊 文本片段：</span>
-                            <strong>${chunkCount} 个</strong>
-                        </div>
-                        <div style="background: rgba(255,255,255,0.5); padding: 6px 10px; border-radius: 4px; grid-column: span 2;">
-                            <span style="opacity: 0.7;">🗄️ 向量数据库：</span>
-                            <strong>${vectorCount} 条记录</strong>
-                            <span style="margin-left: 10px; opacity: 0.8;">${verifiedIcon} ${verified ? '已验证' : '验证中'}</span>
-                        </div>
-                    </div>
-                `;
-            } else {
-                uploadResult.innerHTML = `<span>❌</span> ${errorMessage || '上传失败'}`;
-            }
+        function showUploadResult(type, message) {
+            uploadResult.className = 'upload-result show ' + type;
+            uploadResult.textContent = message;
         }
 
-        function formatNumber(num) {
-            if (num === undefined || num === null) return '0';
-            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        function updateKbStatus(summary) {
+            kbStatus.style.display = 'block';
+            kbStatusContent.innerHTML = `
+                <div style="margin-bottom: 6px;">
+                    共 <strong>${summary.total_files_in_kb}</strong> 个文件，
+                    <strong>${summary.total_chunks_in_kb}</strong> 条向量记录
+                </div>
+                <div class="kb-files-list">
+                    ${summary.files_in_kb.map(f => `<span class="kb-file-tag">${f.file_name}</span>`).join('')}
+                </div>
+            `;
         }
 
-        function updateCurrentDocument(fileName, totalChars, vectorCount) {
-            currentDocName.textContent = fileName;
-            let statsText = '上传时间: ' + new Date().toLocaleString('zh-CN');
-            if (totalChars !== undefined && totalChars !== null) {
-                statsText += ` | 文本: ${formatNumber(totalChars)} 字符`;
+        function updateCurrentDocsDisplay(files) {
+            if (!files || files.length === 0) {
+                currentDocs.classList.remove('show');
+                return;
             }
-            if (vectorCount !== undefined && vectorCount !== null) {
-                statsText += ` | 向量: ${vectorCount} 条`;
-            }
-            currentDocTime.textContent = statsText;
-            currentDoc.classList.add('show');
-        }
 
-        function showQuickQuestions(fileName) {
-            const questions = [
-                `这份文档主要讲了什么？`,
-                `请总结这份文档的要点`,
-                `文档中有哪些关键信息？`
-            ];
-
-            quickTags.innerHTML = questions.map(q =>
-                `<span class="quick-tag">${q}</span>`
-            ).join('');
-
-            quickQuestions.classList.add('show');
-
-            quickTags.querySelectorAll('.quick-tag').forEach(tag => {
-                tag.addEventListener('click', () => {
-                    chatInput.value = tag.textContent;
-                    chatInput.focus();
-                    autoResize();
-                });
-            });
+            currentDocs.classList.add('show');
+            currentDocsList.innerHTML = files.map(f => `
+                <div class="current-doc-item">• ${f.file_name} (${f.chunk_count} 片段)</div>
+            `).join('');
+            currentDocsTime.textContent = '上传时间: ' + new Date().toLocaleString('zh-CN');
         }
 
         chatInput.addEventListener('input', autoResize);
         chatInput.addEventListener('keydown', handleKeyDown);
         sendBtn.addEventListener('click', sendMessage);
+        doUploadBtn.addEventListener('click', handleFileUpload);
 
         function autoResize() {
             chatInput.style.height = 'auto';
@@ -975,8 +1201,8 @@
         async function sendMessage() {
             const message = chatInput.value.trim();
             if (!message) return;
-            if (!hasDocument) {
-                addSystemMessage('请先上传文档后再提问！');
+            if (!hasDocumentsInKb) {
+                addSystemMessage('请先上传文档到知识库后再提问！');
                 return;
             }
 
@@ -1104,22 +1330,21 @@
                 const result = await response.json();
 
                 if (result.success && result.data.current_document) {
-                    const doc = result.data.current_document;
-                    updateCurrentDocument(
-                        doc.file_name,
-                        doc.total_chars,
-                        doc.stored_in_vector_db
-                    );
-                    hasDocument = true;
+                    hasDocumentsInKb = true;
                     sendBtn.disabled = false;
 
                     if (welcomeMessage) {
                         welcomeMessage.style.display = 'none';
                     }
 
-                    showQuickQuestions(doc.file_name);
+                    const kbFiles = [{
+                        file_name: result.data.current_document.file_name,
+                        chunk_count: result.data.current_document.total_chunks || '?'
+                    }];
+                    updateCurrentDocsDisplay(kbFiles);
                 }
             } catch (e) {
+                console.log('检查文档状态失败:', e);
             }
         }
 
