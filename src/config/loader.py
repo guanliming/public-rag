@@ -25,15 +25,9 @@ except ImportError:
 
 
 # YAML 配置到环境变量的映射
+# 注意：数据库配置全部视为敏感信息，不在 settings.yaml 中配置
+# 数据库配置请放在 .env 文件中
 YAML_TO_ENV_MAPPING = {
-    "database": {
-        "host": "DB_HOST",
-        "port": "DB_PORT",
-        "user": "DB_USER",
-        "db_name": "DB_NAME",
-        "vector_table_name": "VECTOR_TABLE_NAME",
-        "embedding_dimension": "EMBEDDING_DIMENSION",
-    },
     "embedding": {
         "model_type": "EMBEDDING_MODEL_TYPE",
         "model_name": "EMBEDDING_MODEL_NAME",
@@ -61,6 +55,9 @@ YAML_TO_ENV_MAPPING = {
     "upload": {
         "folder": "UPLOAD_FOLDER",
         "max_content_length": "MAX_CONTENT_LENGTH",
+    },
+    "database": {
+        "auto_recreate_table": "AUTO_RECREATE_TABLE",
     },
 }
 

@@ -371,12 +371,80 @@ class VectorStore:
             self._actual_embedding_dimension = self.config.embedding_dimension
             return self._actual_embedding_dimension
     
+    def _should_auto_recreate(self) -> bool:
+        """
+        检查是否启用了自动重建表的开关
+        
+        从环境变量读取 AUTO_RECREATE_TABLE 配置。
+        
+        Returns:
+            bool: True 表示启用自动重建
+        """
+        auto_recreate = os.getenv("AUTO_RECREATE_TABLE", "false").lower()
+        return auto_recreate in ("true", "1", "yes", "on")
+    
+    def _drop_vector_tables(self) -> bool:
+        """
+        删除向量相关的表
+        
+        删除 langchain_pg_embedding 和 langchain_pg_collection 表，
+        让 PGVector 自动重新创建以匹配新的嵌入维度。
+        
+        Returns:
+            bool: 是否成功删除
+        """
+        try:
+            import psycopg2
+            
+            with psycopg2.connect(self.config.connection_string) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                    ORDER BY table_name
+                """)
+                tables = [t[0] for t in cursor.fetchall()]
+                print(f"数据库中的表: {tables}")
+                
+                dropped = []
+                
+                if 'langchain_pg_embedding' in tables:
+                    try:
+                        cursor.execute("DROP TABLE IF EXISTS langchain_pg_embedding CASCADE")
+                        conn.commit()
+                        dropped.append('langchain_pg_embedding')
+                        print("已删除表: langchain_pg_embedding")
+                    except Exception as e:
+                        print(f"删除 langchain_pg_embedding 失败: {e}")
+                
+                if 'langchain_pg_collection' in tables:
+                    try:
+                        cursor.execute("DROP TABLE IF EXISTS langchain_pg_collection CASCADE")
+                        conn.commit()
+                        dropped.append('langchain_pg_collection')
+                        print("已删除表: langchain_pg_collection")
+                    except Exception as e:
+                        print(f"删除 langchain_pg_collection 失败: {e}")
+                
+                if dropped:
+                    print(f"\n✅ 已删除向量表，下次使用时将自动重建以匹配当前嵌入模型的维度")
+                    return True
+                else:
+                    print("没有需要删除的向量表")
+                    return False
+                    
+        except Exception as e:
+            print(f"删除向量表时出错: {e}")
+            return False
+    
     def _validate_vector_table(self) -> None:
         """
         验证向量表的维度是否匹配
         
         检查数据库中已存在的向量表的维度，
-        如果维度不匹配，需要重建表或给出警告。
+        如果维度不匹配且启用了自动重建开关，
+        则自动删除表让系统重建。
         """
         try:
             import psycopg2
@@ -417,10 +485,17 @@ class VectorStore:
                             print(f"   表中维度: {table_dim}")
                             print(f"   实际嵌入维度: {actual_dim}")
                             print(f"\n   这会导致向量插入失败!")
-                            print(f"\n   解决方案:")
-                            print(f"   1. 删除现有向量表，让系统重新创建")
-                            print(f"   2. 或者更新 .env 文件中的 EMBEDDING_DIMENSION={table_dim}")
-                            print(f"{'!' * 70}")
+                            
+                            if self._should_auto_recreate():
+                                print(f"\n✅ 自动重建表开关已开启，准备删除现有表...")
+                                self._drop_vector_tables()
+                                print(f"{'!' * 70}")
+                            else:
+                                print(f"\n   解决方案:")
+                                print(f"   1. 在 settings.yaml 中设置 database.auto_recreate_table: true")
+                                print(f"      或在 .env 中设置 AUTO_RECREATE_TABLE=true")
+                                print(f"   2. 或者更新 .env 文件中的 EMBEDDING_DIMENSION={table_dim}")
+                                print(f"{'!' * 70}")
                             
                             self._recreate_vector_table = True
                         else:
