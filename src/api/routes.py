@@ -22,7 +22,7 @@ API 端点：
 import os
 import uuid
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from flask import Flask, Blueprint, request, jsonify, render_template, current_app
 from flask_cors import CORS
@@ -204,7 +204,8 @@ def clear_vector_store() -> bool:
     """
     清空向量存储中的所有文档
 
-    每次上传新文档前调用此函数，确保只使用最新上传的资料。
+    注意：此方法现在仅用于特殊情况，
+    正常上传不再清空整个向量库，而是保留为知识库模式。
 
     Returns:
         bool: 是否成功清空
@@ -221,6 +222,22 @@ def clear_vector_store() -> bool:
     except Exception as e:
         print(f"清空向量存储时出错: {e}")
         return False
+
+
+def get_documents_from_store() -> List[Dict[str, Any]]:
+    """
+    获取向量库中所有文档的信息列表
+
+    从向量存储获取已上传的文档列表，使用高效的聚合查询。
+
+    Returns:
+        List[Dict]: 文档信息列表
+    """
+    vector_store = get_vector_store()
+    if vector_store is None:
+        return []
+    
+    return vector_store.get_documents_summary()
 
 
 def register_api_routes(bp: Blueprint) -> None:
@@ -256,258 +273,260 @@ def register_api_routes(bp: Blueprint) -> None:
     @bp.route("/upload", methods=["POST"])
     def upload_document():
         """
-        文档上传接口
+        文档上传接口（知识库模式）
 
         处理用户上传的文档文件，执行：
-        1. 验证文件格式
-        2. 保存到上传目录
-        3. 解析文档内容
-        4. 文本切片
-        5. 向量化存储
+        1. 支持多文件上传
+        2. 验证文件格式
+        3. 保存到上传目录
+        4. 解析文档内容
+        5. 文本切片
+        6. 向量化存储（知识库模式：保留已有数据，同名文件覆盖）
+
+        知识库模式说明：
+        - 每次上传不会清空已有数据，而是累加
+        - 同名文件会先删除旧数据，再写入新数据（覆盖更新）
 
         Request:
             Content-Type: multipart/form-data
-            Body: file=<文档文件>
+            Body: file=<文档文件> (支持多个 file 参数)
 
         Returns:
             JSON: {
                 "success": true,
                 "message": "文档上传成功",
                 "data": {
-                    "file_name": "example.pdf",
-                    "file_path": "uploads/xxx.pdf",
-                    "total_chunks": 10,
-                    "document_ids": ["uuid1", "uuid2", ...]
+                    "total_files": 3,
+                    "success_files": 2,
+                    "failed_files": 1,
+                    "files": [
+                        {
+                            "original_name": "example.pdf",
+                            "total_chunks": 10,
+                            "document_ids": ["uuid1", "uuid2", ...],
+                            "is_overwrite": true  # 是否覆盖了同名文件
+                        },
+                        ...
+                    ],
+                    "errors": [
+                        {
+                            "file_name": "invalid.xyz",
+                            "error": "不支持的文件格式"
+                        }
+                    ]
                 }
             }
-
-        错误响应:
-            - 400: 没有文件或文件格式不支持
-            - 500: 处理过程中出错
         """
-        # 检查是否有文件
-        if "file" not in request.files:
+        files = request.files.getlist("file")
+        
+        if not files or len(files) == 0:
             return jsonify({
                 "success": False,
                 "message": "没有上传文件",
             }), 400
-
-        file = request.files["file"]
-
-        # 检查文件名
-        if file.filename == "":
+        
+        processor = get_document_processor()
+        if processor is None:
             return jsonify({
                 "success": False,
-                "message": "没有选择文件",
-            }), 400
-
-        # 从原始文件名提取扩展名（处理中文文件名和Windows路径）
-        original_filename = file.filename
-        print(f"接收到的原始文件名: {original_filename}")
-
-        # 处理 Windows 路径格式（如 C:\fakepath\filename.txt）
-        # 先用 os.path.basename 提取纯文件名
-        base_name = os.path.basename(original_filename)
-        # 如果 basename 返回空（可能是路径分隔符问题），手动处理
-        if not base_name:
-            # 尝试用反斜杠分割
-            if '\\' in original_filename:
-                base_name = original_filename.split('\\')[-1]
-            elif '/' in original_filename:
-                base_name = original_filename.split('/')[-1]
-            else:
-                base_name = original_filename
-
-        print(f"提取的纯文件名: {base_name}")
-
-        # 提取扩展名
-        _, original_ext = os.path.splitext(base_name)
-        print(f"提取的扩展名: '{original_ext}'")
-
-        # 如果扩展名提取失败，尝试手动查找
-        if not original_ext:
-            # 手动查找最后一个点后的内容
-            if '.' in base_name:
-                original_ext = '.' + base_name.split('.')[-1]
-                print(f"手动提取的扩展名: '{original_ext}'")
-
-        # 检查文件格式（使用原始文件名的扩展名）
-        if SupportedFormats.from_extension(original_ext) is None:
+                "message": "文档处理器未初始化",
+            }), 500
+        
+        vector_store = get_vector_store()
+        if vector_store is None:
             return jsonify({
                 "success": False,
-                "message": f"不支持的文件格式: {original_ext}。支持的格式: {SupportedFormats.get_supported_extensions()}",
-                "supported_formats": SupportedFormats.get_supported_extensions(),
-            }), 400
-
-        # 使用 secure_filename 处理文件名，但处理中文文件名的情况
-        safe_filename = secure_filename(base_name)
-
-        print(f"secure_filename 处理后: '{safe_filename}'")
-
-        # 检查 safe_filename 是否有效（不是只有扩展名或空）
-        def is_valid_filename(filename):
-            if not filename or filename == "":
-                return False
-            # 如果文件名以 . 开头且后面没有其他字符（如 .txt），则无效
-            if filename.startswith('.') and '.' not in filename[1:]:
-                return False
-            # 检查是否只有扩展名（没有主文件名）
-            name, ext = os.path.splitext(filename)
-            if not name and ext:  # 如 ".txt"
-                return False
-            return True
-
-        # 如果 secure_filename 返回无效文件名，使用正则替换
-        if not is_valid_filename(safe_filename):
-            import re
-            # 替换不安全字符为下划线
-            safe_filename = re.sub(r'[^\w\.\-]', '_', base_name)
-            print(f"正则替换后: '{safe_filename}'")
-
-            # 再次检查，如果还是无效，使用默认名
-            if not is_valid_filename(safe_filename):
-                # 提取主文件名（不含扩展名）
-                base_name_without_ext = os.path.splitext(base_name)[0]
-                # 如果主文件名是空的，使用默认名
-                if not base_name_without_ext or base_name_without_ext == "":
-                    safe_filename = f"document{original_ext}"
+                "message": "向量存储未初始化",
+            }), 500
+        
+        success_results = []
+        error_results = []
+        saved_file_paths = []
+        
+        for file in files:
+            if file.filename == "":
+                continue
+            
+            original_filename = file.filename
+            print(f"\n{'='*60}")
+            print(f"处理文件: {original_filename}")
+            print(f"{'='*60}")
+            
+            base_name = os.path.basename(original_filename)
+            if not base_name:
+                if '\\' in original_filename:
+                    base_name = original_filename.split('\\')[-1]
+                elif '/' in original_filename:
+                    base_name = original_filename.split('/')[-1]
                 else:
-                    # 替换主文件名中的不安全字符，然后加上扩展名
-                    safe_base = re.sub(r'[^\w\-]', '_', base_name_without_ext)
-                    if not safe_base or safe_base == "":
-                        safe_base = "document"
-                    safe_filename = f"{safe_base}{original_ext}"
-                print(f"使用默认名: '{safe_filename}'")
-
-        # 最后确保文件名有扩展名
-        _, current_ext = os.path.splitext(safe_filename)
-        if not current_ext and original_ext:
-            safe_filename = f"{safe_filename}{original_ext}"
-            print(f"添加扩展名后: '{safe_filename}'")
-
-        print(f"最终安全文件名: {safe_filename}")
-
-        # 生成唯一文件名
-        unique_filename = f"{uuid.uuid4().hex}_{safe_filename}"
-        file_path = os.path.join(
-            current_app.config["UPLOAD_FOLDER"],
-            unique_filename
-        )
-
-        try:
-            # 保存文件
-            file.save(file_path)
-            print(f"文件已保存: {file_path}")
-            print(f"原始文件名: {original_filename}, 安全文件名: {safe_filename}")
-
-            # 获取文档处理器
-            processor = get_document_processor()
-            if processor is None:
-                return jsonify({
-                    "success": False,
-                    "message": "文档处理器未初始化",
-                }), 500
-
-            # 处理文档
-            documents = processor.process_file(file_path, split=True)
-
-            if not documents:
-                return jsonify({
-                    "success": False,
-                    "message": "文档内容为空或解析失败",
-                }), 500
-
-            # 获取统计信息
-            stats = DocumentProcessor.get_document_stats(documents)
-
-            # 获取向量存储
-            vector_store = get_vector_store()
-            if vector_store is None:
-                return jsonify({
-                    "success": False,
-                    "message": "向量存储未初始化",
+                    base_name = original_filename
+            
+            _, original_ext = os.path.splitext(base_name)
+            if not original_ext:
+                if '.' in base_name:
+                    original_ext = '.' + base_name.split('.')[-1]
+            
+            if SupportedFormats.from_extension(original_ext) is None:
+                error_results.append({
+                    "file_name": original_filename,
+                    "error": f"不支持的文件格式: {original_ext}。支持的格式: {SupportedFormats.get_supported_extensions()}"
+                })
+                continue
+            
+            safe_filename = secure_filename(base_name)
+            
+            def is_valid_filename(filename):
+                if not filename or filename == "":
+                    return False
+                if filename.startswith('.') and '.' not in filename[1:]:
+                    return False
+                name, ext = os.path.splitext(filename)
+                if not name and ext:
+                    return False
+                return True
+            
+            if not is_valid_filename(safe_filename):
+                import re
+                safe_filename = re.sub(r'[^\w\.\-]', '_', base_name)
+                if not is_valid_filename(safe_filename):
+                    base_name_without_ext = os.path.splitext(base_name)[0]
+                    if not base_name_without_ext or base_name_without_ext == "":
+                        safe_filename = f"document{original_ext}"
+                    else:
+                        safe_base = re.sub(r'[^\w\-]', '_', base_name_without_ext)
+                        if not safe_base or safe_base == "":
+                            safe_base = "document"
+                        safe_filename = f"{safe_base}{original_ext}"
+            
+            _, current_ext = os.path.splitext(safe_filename)
+            if not current_ext and original_ext:
+                safe_filename = f"{safe_filename}{original_ext}"
+            
+            unique_filename = f"{uuid.uuid4().hex}_{safe_filename}"
+            file_path = os.path.join(
+                current_app.config["UPLOAD_FOLDER"],
+                unique_filename
+            )
+            
+            try:
+                file.save(file_path)
+                saved_file_paths.append(file_path)
+                print(f"文件已保存: {file_path}")
+                
+                is_overwrite = False
+                deleted_count = vector_store.delete_documents_by_filename(base_name)
+                if deleted_count > 0:
+                    is_overwrite = True
+                    print(f"✅ 检测到同名文件，已删除 {deleted_count} 条旧记录")
+                
+                documents = processor.process_file(file_path, split=True)
+                
+                if not documents:
+                    error_results.append({
+                        "file_name": original_filename,
+                        "error": "文档内容为空或解析失败"
+                    })
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                    continue
+                
+                for doc in documents:
+                    doc.metadata['file_name'] = base_name
+                
+                stats = DocumentProcessor.get_document_stats(documents)
+                
+                print(f"正在向量化并存储到向量数据库...")
+                document_ids = vector_store.add_documents(documents)
+                print(f"调用 add_documents 返回了 {len(document_ids)} 个文档 ID")
+                
+                verification = vector_store.verify_documents_stored(document_ids)
+                print(f"验证结果: {verification['message']}")
+                
+                success_results.append({
+                    "original_name": original_filename,
+                    "base_name": base_name,
+                    "stored_name": unique_filename,
+                    "file_path": file_path,
+                    "total_chunks": len(documents),
+                    "document_ids": document_ids,
+                    "is_overwrite": is_overwrite,
+                    "overwrite_deleted_count": deleted_count,
                     "stats": stats,
-                }), 500
-
-            # 清空之前的文档（确保只使用最新上传的资料）
-            print("正在清空之前的文档数据...")
-            clear_vector_store()
-            print("已清空之前的文档，准备存储新文档")
-
-            # 存储到向量数据库
-            print("正在向量化并存储到向量数据库...")
-            document_ids = vector_store.add_documents(documents)
-            print(f"调用 add_documents 返回了 {len(document_ids)} 个文档 ID")
-
-            # 验证文档是否真的存储到向量数据库
-            print("正在验证数据是否成功存储...")
-            verification = vector_store.verify_documents_stored(document_ids)
-            print(f"验证结果: {verification['message']}")
-
-            # 获取向量数据库统计信息
-            vector_stats = vector_store.get_collection_stats()
-            print(f"向量数据库统计: {vector_stats}")
-
-            # 记录当前上传的文件名（使用原始文件名，便于用户识别）
-            global_store["current_document"] = {
-                "file_name": original_filename,
-                "upload_time": datetime.now().isoformat(),
-                "total_chunks": len(documents),
-                "stored_in_vector_db": verification["stored_count"],
-                "total_chars": stats.get("total_chars", 0),
-            }
-
-            # 准备返回数据
-            response_data = {
-                "original_name": original_filename,
-                "stored_name": unique_filename,
-                "file_path": file_path,
-                "total_chunks": len(documents),
-                "document_ids": document_ids,
-                "stats": stats,
-                "vector_stats": {
-                    "stored_count": verification["stored_count"],
-                    "verification_success": verification["success"],
-                    "verification_message": verification["message"],
-                    "total_documents_in_db": vector_stats.get("total_documents", 0),
-                    "collection_documents": vector_stats.get("collection_documents", 0),
-                    "collection_name": vector_stats.get("collection_name"),
-                },
-                "summary": {
-                    "text_total_chars": stats.get("total_chars", 0),
-                    "text_chunk_count": len(documents),
                     "vector_stored_count": verification["stored_count"],
                     "vector_verified": verification["success"],
-                }
+                })
+                
+            except Exception as e:
+                print(f"\n{'!'*60}")
+                print(f"❌ 处理文件 {original_filename} 时出错: {type(e).__name__}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                print(f"{'!'*60}\n")
+                
+                error_results.append({
+                    "file_name": original_filename,
+                    "error": f"{type(e).__name__}: {str(e)}"
+                })
+                
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+        
+        if not success_results and not error_results:
+            return jsonify({
+                "success": False,
+                "message": "没有有效的文件被上传",
+            }), 400
+        
+        total_files = len(success_results) + len(error_results)
+        
+        all_docs = get_documents_from_store()
+        total_chunks_in_kb = sum(d.get('chunk_count', 0) for d in all_docs)
+        total_files_in_kb = len(all_docs)
+        
+        response_data = {
+            "total_files": total_files,
+            "success_files": len(success_results),
+            "failed_files": len(error_results),
+            "files": success_results,
+            "errors": error_results,
+            "knowledge_base_summary": {
+                "total_files_in_kb": total_files_in_kb,
+                "total_chunks_in_kb": total_chunks_in_kb,
+                "files_in_kb": all_docs,
             }
-
-            if verification["success"]:
+        }
+        
+        if success_results:
+            latest_file = success_results[-1]
+            global_store["current_document"] = {
+                "file_name": latest_file["original_name"],
+                "upload_time": datetime.now().isoformat(),
+                "total_chunks": latest_file["total_chunks"],
+                "stored_in_vector_db": latest_file["vector_stored_count"],
+                "total_chars": latest_file["stats"].get("total_chars", 0),
+            }
+            
+            all_files_message = "、".join([f["original_name"] for f in success_results])
+            
+            if len(success_results) == 1:
+                file_info = success_results[0]
+                overwrite_msg = "（覆盖更新）" if file_info["is_overwrite"] else "（新增）"
                 return jsonify({
                     "success": True,
-                    "message": f"文档上传并处理成功！文本总量: {stats.get('total_chars', 0)} 字符，向量数据库: {verification['stored_count']} 条记录",
+                    "message": f"文档上传成功！{overwrite_msg} 文件: {file_info['original_name']}，文本总量: {file_info['stats'].get('total_chars', 0)} 字符，向量数据库: {file_info['vector_stored_count']} 条记录",
                     "data": response_data,
                 })
             else:
                 return jsonify({
-                    "success": False,
-                    "message": f"文档处理完成但验证失败: {verification['message']}",
+                    "success": True,
+                    "message": f"批量上传成功！共 {len(success_results)} 个文件: {all_files_message}",
                     "data": response_data,
-                }), 500
-
-        except Exception as e:
-            print(f"\n{'=' * 80}")
-            print(f"❌ 处理文档时发生错误: {type(e).__name__}: {str(e)}")
-            print(f"{'=' * 80}")
-            import traceback
-            traceback.print_exc()
-            print(f"{'=' * 80}\n")
-            
-            if os.path.exists(file_path):
-                os.remove(file_path)
-
+                })
+        else:
             return jsonify({
                 "success": False,
-                "message": f"处理文档时出错: {type(e).__name__}: {str(e)}",
+                "message": f"上传失败，所有 {len(error_results)} 个文件都处理失败",
+                "data": response_data,
             }), 500
 
     @bp.route("/search", methods=["POST"])
@@ -741,7 +760,8 @@ def register_api_routes(bp: Blueprint) -> None:
                     "llm_config": {
                         "model": "qwen3.6-35b-a3b"
                     },
-                    "current_document": {...}
+                    "current_document": {...},
+                    "all_documents": [...]
                 }
             }
         """
@@ -753,6 +773,8 @@ def register_api_routes(bp: Blueprint) -> None:
             llm_model = llm_config.model
         except Exception:
             llm_model = None
+
+        all_documents = get_documents_from_store()
 
         return jsonify({
             "success": True,
@@ -772,8 +794,77 @@ def register_api_routes(bp: Blueprint) -> None:
                     "model": llm_model,
                 },
                 "current_document": global_store.get("current_document"),
-            },
+                "all_documents": all_documents,
+            }
         })
+
+    @bp.route("/documents/<path:filename>", methods=["DELETE"])
+    def delete_document(filename):
+        """
+        删除指定文件名的所有文档向量
+
+        从向量数据库中删除指定文件名的所有相关记录。
+        用于知识库管理，允许用户删除不需要的文档。
+
+        Args:
+            filename: 要删除的文件名（支持路径风格的 URL）
+
+        Returns:
+            JSON: {
+                "success": true,
+                "message": "已成功删除文档",
+                "data": {
+                    "file_name": "example.pdf",
+                    "deleted_count": 10
+                }
+            }
+        """
+        from urllib.parse import unquote
+        
+        decoded_filename = unquote(filename)
+        
+        vector_store = get_vector_store()
+        if vector_store is None:
+            return jsonify({
+                "success": False,
+                "message": "向量存储未初始化",
+            }), 500
+        
+        try:
+            deleted_count = vector_store.delete_documents_by_filename(decoded_filename)
+            
+            if deleted_count > 0:
+                all_documents = get_documents_from_store()
+                hasDocumentsInKb = len(all_documents) > 0
+                
+                return jsonify({
+                    "success": True,
+                    "message": f"已成功删除文档 {decoded_filename}",
+                    "data": {
+                        "file_name": decoded_filename,
+                        "deleted_count": deleted_count,
+                        "remaining_documents": all_documents,
+                        "has_documents": hasDocumentsInKb,
+                    }
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "message": f"未找到文件名 {decoded_filename} 的文档",
+                    "data": {
+                        "file_name": decoded_filename,
+                        "deleted_count": 0,
+                    }
+                }), 404
+                
+        except Exception as e:
+            print(f"删除文档时出错: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                "success": False,
+                "message": f"删除文档时出错: {str(e)}",
+            }), 500
 
 
 def register_page_routes(bp: Blueprint) -> None:
