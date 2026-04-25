@@ -495,13 +495,19 @@ def register_api_routes(bp: Blueprint) -> None:
                 }), 500
 
         except Exception as e:
-            # 清理保存的文件（如果有）
+            print(f"\n{'=' * 80}")
+            print(f"❌ 处理文档时发生错误: {type(e).__name__}: {str(e)}")
+            print(f"{'=' * 80}")
+            import traceback
+            traceback.print_exc()
+            print(f"{'=' * 80}\n")
+            
             if os.path.exists(file_path):
                 os.remove(file_path)
 
             return jsonify({
                 "success": False,
-                "message": f"处理文档时出错: {str(e)}",
+                "message": f"处理文档时出错: {type(e).__name__}: {str(e)}",
             }), 500
 
     @bp.route("/search", methods=["POST"])

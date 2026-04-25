@@ -438,12 +438,50 @@ class VectorStore:
             print(f"删除向量表时出错: {e}")
             return False
     
+    def _check_table_schema_compatibility(self, cursor) -> tuple[bool, str]:
+        """
+        检查表结构是否与当前版本的 PGVector 兼容
+        
+        检查关键列是否存在，如 custom_id 等。
+        
+        Args:
+            cursor: 数据库游标
+            
+        Returns:
+            tuple[bool, str]: (是否兼容, 不兼容的原因)
+        """
+        try:
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'langchain_pg_embedding' 
+                AND table_schema = 'public'
+                ORDER BY ordinal_position
+            """)
+            columns = [row[0] for row in cursor.fetchall()]
+            print(f"  表 langchain_pg_embedding 的列: {columns}")
+            
+            required_columns = ['collection_id', 'embedding', 'document', 'cmetadata', 'custom_id', 'uuid']
+            
+            missing_columns = []
+            for col in required_columns:
+                if col not in columns:
+                    missing_columns.append(col)
+            
+            if missing_columns:
+                return False, f"缺少关键列: {missing_columns}"
+            
+            return True, "表结构兼容"
+            
+        except Exception as e:
+            return False, f"检查表结构时出错: {e}"
+    
     def _validate_vector_table(self) -> None:
         """
-        验证向量表的维度是否匹配
+        验证向量表的维度和结构是否匹配
         
-        检查数据库中已存在的向量表的维度，
-        如果维度不匹配且启用了自动重建开关，
+        检查数据库中已存在的向量表的维度和结构，
+        如果维度不匹配或结构不兼容且启用了自动重建开关，
         则自动删除表让系统重建。
         """
         try:
@@ -461,7 +499,18 @@ class VectorStore:
                     print("向量表不存在，将在首次使用时创建")
                     return
                 
-                print("\n检查现有向量表的维度...")
+                print("\n" + "=" * 70)
+                print("验证现有向量表...")
+                print("=" * 70)
+                
+                print("\n1. 检查表结构兼容性...")
+                schema_compatible, schema_message = self._check_table_schema_compatibility(cursor)
+                print(f"   结果: {schema_message}")
+                
+                print("\n2. 检查向量维度...")
+                dimension_ok = True
+                table_dim = None
+                actual_dim = self._actual_embedding_dimension or self.config.embedding_dimension
                 
                 try:
                     cursor.execute("""
@@ -474,38 +523,59 @@ class VectorStore:
                     
                     if result and result[0] > -1:
                         table_dim = result[0]
-                        actual_dim = self._actual_embedding_dimension or self.config.embedding_dimension
-                        
-                        print(f"  表中向量维度: {table_dim}")
-                        print(f"  实际嵌入维度: {actual_dim}")
+                        print(f"   表中向量维度: {table_dim}")
+                        print(f"   实际嵌入维度: {actual_dim}")
                         
                         if table_dim != actual_dim:
-                            print(f"\n{'!' * 70}")
-                            print(f"⚠️  严重问题: 向量表维度不匹配!")
-                            print(f"   表中维度: {table_dim}")
-                            print(f"   实际嵌入维度: {actual_dim}")
-                            print(f"\n   这会导致向量插入失败!")
-                            
-                            if self._should_auto_recreate():
-                                print(f"\n✅ 自动重建表开关已开启，准备删除现有表...")
-                                self._drop_vector_tables()
-                                print(f"{'!' * 70}")
-                            else:
-                                print(f"\n   解决方案:")
-                                print(f"   1. 在 settings.yaml 中设置 database.auto_recreate_table: true")
-                                print(f"      或在 .env 中设置 AUTO_RECREATE_TABLE=true")
-                                print(f"   2. 或者更新 .env 文件中的 EMBEDDING_DIMENSION={table_dim}")
-                                print(f"{'!' * 70}")
-                            
-                            self._recreate_vector_table = True
-                        else:
-                            print(f"✅ 向量表维度匹配: {table_dim}")
-                            
+                            dimension_ok = False
+                    else:
+                        print("   无法检测表中向量维度")
+                        
                 except Exception as e:
-                    print(f"检查表维度时出错: {e}")
+                    print(f"   检查维度时出错: {e}")
+                
+                need_recreate = False
+                reasons = []
+                
+                if not schema_compatible:
+                    need_recreate = True
+                    reasons.append(f"表结构不兼容: {schema_message}")
+                
+                if not dimension_ok and table_dim is not None:
+                    need_recreate = True
+                    reasons.append(f"维度不匹配: 表中 {table_dim} 维 vs 实际 {actual_dim} 维")
+                
+                if need_recreate:
+                    print("\n" + "!" * 70)
+                    print("⚠️  检测到表需要重建!")
+                    for reason in reasons:
+                        print(f"   - {reason}")
+                    print(f"\n   这会导致向量插入失败!")
+                    
+                    if self._should_auto_recreate():
+                        print(f"\n✅ 自动重建表开关已开启，准备删除现有表...")
+                        self._drop_vector_tables()
+                        print(f"✅ 表已删除，下次操作时将自动重建以匹配当前配置")
+                        print(f"!" * 70)
+                    else:
+                        print(f"\n   解决方案:")
+                        print(f"   1. 在 settings.yaml 中设置 database.auto_recreate_table: true")
+                        print(f"      或在 .env 中设置 AUTO_RECREATE_TABLE=true")
+                        print(f"   2. 然后重启应用")
+                        print(f"!" * 70)
+                    
+                    self._recreate_vector_table = True
+                else:
+                    print("\n✅ 向量表验证通过:")
+                    print(f"   - 表结构兼容")
+                    if table_dim:
+                        print(f"   - 维度匹配: {table_dim}")
+                    print("=" * 70)
                     
         except Exception as e:
             print(f"验证向量表时出错: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _get_vector_store(self) -> PGVector:
         """
