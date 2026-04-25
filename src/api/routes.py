@@ -447,8 +447,7 @@ def register_api_routes(bp: Blueprint) -> None:
                     continue
                 
                 for doc in documents:
-                    if 'file_name' not in doc.metadata:
-                        doc.metadata['file_name'] = base_name
+                    doc.metadata['file_name'] = base_name
                 
                 stats = DocumentProcessor.get_document_stats(documents)
                 
