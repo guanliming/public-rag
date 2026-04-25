@@ -1108,24 +1108,28 @@
 
                 uploadProgress.classList.remove('show');
 
+                let kbHasDocuments = false;
                 if (result.data && result.data.knowledge_base_summary) {
                     const kbSummary = result.data.knowledge_base_summary;
-                    hasDocumentsInKb = kbSummary.total_files_in_kb > 0;
+                    kbHasDocuments = kbSummary.total_files_in_kb > 0;
                     
-                    if (hasDocumentsInKb) {
+                    if (kbHasDocuments) {
                         updateKbStatus(kbSummary);
                         updateCurrentDocsDisplay(kbSummary.files_in_kb);
-                        hasDocumentsInKb = true;
-                        sendBtn.disabled = false;
-
-                        if (welcomeMessage) {
-                            welcomeMessage.style.display = 'none';
-                        }
                     }
                 }
 
                 const successCount = result.data?.success_files || 0;
                 const failedCount = result.data?.failed_files || 0;
+
+                if (successCount > 0 || kbHasDocuments) {
+                    hasDocumentsInKb = true;
+                    sendBtn.disabled = false;
+
+                    if (welcomeMessage) {
+                        welcomeMessage.style.display = 'none';
+                    }
+                }
 
                 if (successCount > 0 && failedCount === 0) {
                     showUploadResult('success', `成功上传 ${successCount} 个文件到知识库`);
@@ -1329,19 +1333,19 @@
                 const response = await fetch('/api/stats');
                 const result = await response.json();
 
-                if (result.success && result.data.current_document) {
-                    hasDocumentsInKb = true;
-                    sendBtn.disabled = false;
+                if (result.success) {
+                    const allDocuments = result.data.all_documents || [];
+                    hasDocumentsInKb = allDocuments.length > 0;
 
-                    if (welcomeMessage) {
-                        welcomeMessage.style.display = 'none';
+                    if (hasDocumentsInKb) {
+                        sendBtn.disabled = false;
+
+                        if (welcomeMessage) {
+                            welcomeMessage.style.display = 'none';
+                        }
+
+                        updateCurrentDocsDisplay(allDocuments);
                     }
-
-                    const kbFiles = [{
-                        file_name: result.data.current_document.file_name,
-                        chunk_count: result.data.current_document.total_chunks || '?'
-                    }];
-                    updateCurrentDocsDisplay(kbFiles);
                 }
             } catch (e) {
                 console.log('检查文档状态失败:', e);

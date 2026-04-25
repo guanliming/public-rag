@@ -776,7 +776,8 @@ def register_api_routes(bp: Blueprint) -> None:
                     "llm_config": {
                         "model": "qwen3.6-35b-a3b"
                     },
-                    "current_document": {...}
+                    "current_document": {...},
+                    "all_documents": [...]
                 }
             }
         """
@@ -788,6 +789,8 @@ def register_api_routes(bp: Blueprint) -> None:
             llm_model = llm_config.model
         except Exception:
             llm_model = None
+
+        all_documents = get_documents_from_store()
 
         return jsonify({
             "success": True,
@@ -807,7 +810,8 @@ def register_api_routes(bp: Blueprint) -> None:
                     "model": llm_model,
                 },
                 "current_document": global_store.get("current_document"),
-            },
+                "all_documents": all_documents,
+            }
         })
 
 
