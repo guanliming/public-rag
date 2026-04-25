@@ -56,6 +56,9 @@ YAML_TO_ENV_MAPPING = {
         "folder": "UPLOAD_FOLDER",
         "max_content_length": "MAX_CONTENT_LENGTH",
     },
+    "database": {
+        "auto_recreate_table": "AUTO_RECREATE_TABLE",
+    },
 }
 
 

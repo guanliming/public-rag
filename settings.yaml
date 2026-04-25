@@ -6,9 +6,15 @@
 # 嵌入模型配置
 # ============================================
 embedding:
-  model_type: dashscope
-  model_name: tongyi-embedding-vision-flash-2026-03-06
+  model_type: local
+  model_name: models/bge-small-zh-v1.5
   device: cpu
+
+# ============================================
+# 数据库高级配置
+# ============================================
+database:
+  auto_recreate_table: true
 
 # ============================================
 # 文档切片配置

@@ -647,6 +647,11 @@ EMBEDDING_DIMENSIONS = {
     "all-mpnet-base-v2": 768,
     "paraphrase-multilingual-MiniLM-L12-v2": 384,
     "paraphrase-multilingual-mpnet-base-v2": 768,
+    # BGE 中文模型
+    "bge-small-zh-v1.5": 512,
+    "bge-small-zh": 512,
+    "bge-base-zh-v1.5": 768,
+    "bge-large-zh-v1.5": 1024,
     # OpenAI 模型
     "text-embedding-ada-002": 1536,
     "text-embedding-3-small": 1536,
