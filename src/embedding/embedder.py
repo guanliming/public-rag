@@ -201,6 +201,51 @@ class EmbeddingFactory:
         return embedding
 
     @classmethod
+    def _get_project_root(cls) -> str:
+        """
+        获取项目根目录路径
+        
+        Returns:
+            str: 项目根目录的绝对路径
+        """
+        current_file = os.path.abspath(__file__)
+        src_dir = os.path.dirname(os.path.dirname(current_file))
+        project_root = os.path.dirname(src_dir)
+        return project_root
+    
+    @classmethod
+    def _resolve_model_path(cls, model_name: str) -> str:
+        """
+        解析模型路径
+        
+        处理相对路径，转换为相对于项目根目录的绝对路径。
+        如果是 HuggingFace Hub 模型名（如 "all-MiniLM-L6-v2"），则直接返回。
+        
+        Args:
+            model_name: 模型名称或路径
+            
+        Returns:
+            str: 解析后的模型路径
+        """
+        project_root = cls._get_project_root()
+        
+        if os.path.isabs(model_name):
+            return model_name
+        
+        possible_local_path = os.path.join(project_root, model_name)
+        if os.path.exists(possible_local_path):
+            print(f"  发现本地模型路径: {possible_local_path}")
+            return possible_local_path
+        
+        possible_models_dir = os.path.join(project_root, "models", model_name)
+        if os.path.exists(possible_models_dir):
+            print(f"  发现本地模型路径: {possible_models_dir}")
+            return possible_models_dir
+        
+        print(f"  未找到本地模型，将尝试从 HuggingFace Hub 加载: {model_name}")
+        return model_name
+
+    @classmethod
     def _create_local_embedding(cls, config: EmbeddingConfig) -> Embeddings:
         """
         创建本地嵌入模型
@@ -223,28 +268,35 @@ class EmbeddingFactory:
             - paraphrase-multilingual-MiniLM-L12-v2: 多语言支持
         """
         try:
-            # 延迟导入，只有在使用本地模型时才需要安装
             from langchain_community.embeddings import HuggingFaceEmbeddings
 
             print(f"正在加载本地嵌入模型: {config.model_name}...")
             print(f"运行设备: {config.device}")
+            
+            model_path = cls._resolve_model_path(config.model_name)
+            print(f"解析后的模型路径: {model_path}")
+            
+            if os.path.exists(model_path):
+                print(f"✅ 确认本地模型存在，准备加载...")
+                print(f"   这可能需要几秒钟到几十秒，请耐心等待...")
+            else:
+                print(f"⚠️  本地模型不存在，将尝试从 HuggingFace Hub 下载...")
+                print(f"   这可能需要较长时间，取决于网络速度...")
 
-            # 配置模型参数
             model_kwargs = {"device": config.device}
 
-            # 配置编码参数
             encode_kwargs = {
-                "normalize_embeddings": True,  # 归一化向量，便于余弦相似度计算
+                "normalize_embeddings": True,
             }
 
-            # 创建嵌入模型
+            print("正在初始化 HuggingFaceEmbeddings...")
             embedding = HuggingFaceEmbeddings(
-                model_name=config.model_name,
+                model_name=model_path,
                 model_kwargs=model_kwargs,
                 encode_kwargs=encode_kwargs,
             )
 
-            print(f"本地模型加载完成: {config.model_name}")
+            print(f"✅ 本地模型加载完成: {model_path}")
             return embedding
 
         except ImportError as e:
@@ -252,6 +304,12 @@ class EmbeddingFactory:
                 "使用本地嵌入模型需要安装 sentence-transformers。"
                 "请运行: pip install sentence-transformers"
             ) from e
+        except Exception as e:
+            print(f"\n❌ 加载本地嵌入模型时出错: {e}")
+            print(f"   模型路径: {config.model_name}")
+            import traceback
+            traceback.print_exc()
+            raise
 
     @classmethod
     def _create_openai_embedding(cls, config: EmbeddingConfig) -> Embeddings:
@@ -678,7 +736,7 @@ def get_embedding_dimension(model_name: str) -> int:
     知道向量维度对于配置 pgvector 很重要。
 
     Args:
-        model_name: 模型名称
+        model_name: 模型名称或路径（支持 "models/bge-small-zh-v1.5" 这样的路径格式）
 
     Returns:
         int: 向量维度，如果未知返回 384（默认）
@@ -688,8 +746,21 @@ def get_embedding_dimension(model_name: str) -> int:
         384
         >>> get_embedding_dimension("text-embedding-ada-002")
         1536
+        >>> get_embedding_dimension("models/bge-small-zh-v1.5")
+        512
     """
-    return EMBEDDING_DIMENSIONS.get(model_name, 384)
+    if model_name in EMBEDDING_DIMENSIONS:
+        return EMBEDDING_DIMENSIONS[model_name]
+    
+    base_name = os.path.basename(model_name.rstrip('/\\'))
+    if base_name in EMBEDDING_DIMENSIONS:
+        return EMBEDDING_DIMENSIONS[base_name]
+    
+    for known_name in EMBEDDING_DIMENSIONS:
+        if known_name in model_name:
+            return EMBEDDING_DIMENSIONS[known_name]
+    
+    return 384
 
 
 class EmbeddingUtils:
